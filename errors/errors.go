@@ -162,18 +162,18 @@ func String(err error) string {
 		if first {
 			first = false
 		} else {
-			buf.WriteString("Caused by: ")
+			buf.WriteString("\nCaused by: ")
 		}
-		buf.WriteString(err.Error() + "\n")
+		buf.WriteString(err.Error())
 		stack := Stack(err)
 		if stack != nil {
 			frames := formatStack(stack)
 			for i, frame := range frames {
-				buf.WriteString("  ")
+				buf.WriteString("\n  ")
 				if i%2 == 1 {
 					buf.WriteString("  ")
 				}
-				buf.WriteString(frame + "\n")
+				buf.WriteString(frame)
 			}
 		}
 	}
