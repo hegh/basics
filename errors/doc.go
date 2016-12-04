@@ -5,6 +5,9 @@
 // Provides drop-in replacements for errors.New and fmt.Errorf that capture
 // and retain more detailed error information.
 //
+// To format an error string including a stack trace and causes when they are
+// available (works fine on other errors too):
+//   errors.String(err)
 //
 // Example when returning an error:
 //   return errors.New("message")
