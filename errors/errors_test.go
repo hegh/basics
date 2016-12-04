@@ -2,7 +2,7 @@ package errors
 
 import (
 	"fmt"
-	"runtime"
+	"io"
 	"testing"
 )
 
@@ -37,8 +37,8 @@ func TestNewWithCause(t *testing.T) {
 	}
 }
 
-func TestPrintWithoutCause(t *testing.T) {
-	e := Print("message string: ", 5)
+func TestErrorfWithoutCause(t *testing.T) {
+	e := Errorf("message string: %d", 5)
 	if m := e.Error(); m != "message string: 5" {
 		t.Errorf("Got %q want %q for error message", m, "message string: 5")
 	}
@@ -52,9 +52,9 @@ func TestPrintWithoutCause(t *testing.T) {
 	}
 }
 
-func TestPrintWithCause(t *testing.T) {
+func TestErrorfWithCause(t *testing.T) {
 	ex := fmt.Errorf("the cause")
-	e := Print("message string: ", ex)
+	e := Errorf("message string: %v", ex)
 	if m := e.Error(); m != "message string: the cause" {
 		t.Errorf("Got %q want %q for error message", m, "message string: the cause")
 	}
@@ -68,10 +68,10 @@ func TestPrintWithCause(t *testing.T) {
 	}
 }
 
-func TestPrintWithMultipleErrors(t *testing.T) {
+func TestErrorfWithMultipleErrors(t *testing.T) {
 	ex := fmt.Errorf("the cause")
 	ex2 := fmt.Errorf("extra error")
-	e := Print("message string (", ex2, "): ", ex)
+	e := Errorf("message string (%v): %v", ex2, ex)
 	if m := e.Error(); m != "message string (extra error): the cause" {
 		t.Errorf("Got %q want %q for error message", m, "message string (extra error): the cause")
 	}
@@ -85,66 +85,15 @@ func TestPrintWithMultipleErrors(t *testing.T) {
 	}
 }
 
-func TestPrintfWithoutCause(t *testing.T) {
-	e := Printf("message string: %d", 5)
-	if m := e.Error(); m != "message string: 5" {
-		t.Errorf("Got %q want %q for error message", m, "message string: 5")
-	}
+// TestString writes an example error to stdout for the person running the test
+// to verify. It is really intended to help verify the format is readable, which
+// cannot be verified by an automated test.
+func TestString(t *testing.T) {
+	err := io.EOF
+	err = Errorf("foo failed: %v", err)
+	err = Errorf("bar failed: %v", err)
 
-	if len(Stack(e)) == 0 {
-		t.Errorf("Got 0 want some data for stack trace")
-	}
-
-	if err := Cause(e); err != nil {
-		t.Errorf("Got %q want nil for error cause", err)
-	}
-}
-
-func TestPrintfWithCause(t *testing.T) {
-	ex := fmt.Errorf("the cause")
-	e := Printf("message string: %v", ex)
-	if m := e.Error(); m != "message string: the cause" {
-		t.Errorf("Got %q want %q for error message", m, "message string: the cause")
-	}
-
-	if len(Stack(e)) == 0 {
-		t.Errorf("Got 0 want some data for stack trace")
-	}
-
-	if err := Cause(e); err != ex {
-		t.Errorf("Got %q want %q for error cause", err, ex)
-	}
-}
-
-func TestPrintfWithMultipleErrors(t *testing.T) {
-	ex := fmt.Errorf("the cause")
-	ex2 := fmt.Errorf("extra error")
-	e := Printf("message string (%v): %v", ex2, ex)
-	if m := e.Error(); m != "message string (extra error): the cause" {
-		t.Errorf("Got %q want %q for error message", m, "message string (extra error): the cause")
-	}
-
-	if len(Stack(e)) == 0 {
-		t.Errorf("Got 0 want some data for stack trace")
-	}
-
-	if err := Cause(e); err != ex {
-		t.Errorf("Got %q want %q for error cause", err, ex)
-	}
-}
-
-func TestFormatStack(t *testing.T) {
-	// Keep these two lines together, in this order, to avoid breaking.
-	_, file, line, ok := runtime.Caller(0)
-	err := New("message")
-
-	if !ok {
-		t.Fatalf("Could not determine location of caller")
-	}
-
-	trace := FormatStack(Stack(err))
-	want := fmt.Sprintf("%s:%d", file, line+1)
-	if trace[0] != want {
-		t.Errorf("Got %q want %q for first element of formatted stack trace. Full trace: %v", trace[0], want, trace)
-	}
+	fmt.Println()
+	fmt.Println("HEY YOU! TESTER! Make sure this stack trace is easy to read:")
+	fmt.Println(String(err))
 }
