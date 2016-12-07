@@ -3,7 +3,7 @@ the standard library.
 
 # Components
 
-## errors
+## errors - Errors with stack traces and causes
 
 A drop-in replacement for the Golang `errors` package, and `fmt.Errorf`. As long
 as you use the fuctions provided by this package, errors will have causes
@@ -56,7 +56,7 @@ To test whether a given error originated with your template error:
     template == errors.Original(err)
 
 
-## ln
+## ln - A logging package with a natural interface
 
 A new logging package that is a bit more flexible and easier to use than the
 standard library `log` package.
@@ -66,11 +66,12 @@ An output log line will look something like this:
     I1203 10:04:59.846813 FuncName(filename.go:65) Message
 
 The `I` indicates this is at Info level. It could also be a `W`, `E`, or `F` for
-Warning, Error, or Fatal, respectively.
+Warning, Error, or Fatal, respectively (the prefix is configurable).
 
 The `1203` indicates this was logged on December 3rd.
 
-The `10:04:59.846813` is the timestamp, on a 24-hour clock in local time.
+The `10:04:59.846813` is the timestamp, on a 24-hour clock in local time
+(the timezone is configurable).
 
 The `FuncName(filename.go:65)` describes the caller that logged the message.
 
