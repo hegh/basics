@@ -11,7 +11,7 @@ and stack traces tracked across message formatting.
 
 The important parts of the interface are:
 
-### New
+### New - Build a new error
 
     errors.New("error description")
 
@@ -24,7 +24,7 @@ To print the error message with its stack trace:
 
     fmt.Println(errors.String(err))
 
-### Errorf
+### Errorf - Format and capture a cause
 
     errors.Errorf("function foo failed: %v", err)
 
@@ -39,7 +39,7 @@ To print the error message with its stack trace and cause chain:
 
     fmt.Println(errors.String(err))
 
-### NewTrace
+### NewTrace - Copy an error and capture a new stack trace
 
     errors.NewTrace(err, 0)
 
