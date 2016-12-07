@@ -12,6 +12,11 @@ import (
 )
 
 var (
+	// TZ is the timezone to use for log messages.
+	//
+	// If it is nil, uses the default for time.Now().
+	TZ *time.Location
+
 	// Verbosity provides control over whether the Logger returned by V will do
 	// anything.
 	Verbosity = 0
@@ -248,6 +253,10 @@ func MakeLogger(prefix string, w io.Writer, trigger func()) Logger {
 // be passed directly to an io.Writer.
 func assemble(skip int, prefix string, msg string) []byte {
 	now := time.Now()
+	if tz := TZ; tz != nil {
+		now = now.In(tz)
+	}
+
 	file, lineNum, fnc, ok := caller(skip + 1)
 	var line string
 	if ok {

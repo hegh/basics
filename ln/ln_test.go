@@ -24,18 +24,24 @@ const (
 	fileName = "ln_test.go"
 )
 
-// Matches a log line and extracts subgroups:
-//  1 = prefix
-//  2 = function name
-//  3 = file name
-//  4 = file number
-//  5 = log message
-// This will match the first line out of multiple log lines.
+// Matches a log line and extracts subgroups (see the constants below).
+//
+// Matches the first line out of multiple log lines.
 //
 // Example message:
 //  X1202 10:04:59.846813 TestCall(ln_test.go:65) test info message\n
 var matcher = regexp.MustCompile(
-	`^(.)\d{4} \d{2}:\d{2}:\d{2}\.\d{6} ([^(]+)\(([^:]+):(\d+)\) (.*)`)
+	`^(.)\d{4} (\d{2}:\d{2}:\d{2}\.\d{6}) ([^(]+)\(([^:]+):(\d+)\) (.*)`)
+
+// The subgroup indices from the regexp above.
+const (
+	prefixIdx     = 1 // I, W, E, ...
+	timestampIdx  = 2 // Timestamp without date
+	funcNameIdx   = 3
+	fileNameIdx   = 4
+	lineNumberIdx = 5
+	logMessageIdx = 6
+)
 
 type sink struct {
 	data     *bytes.Buffer
@@ -113,23 +119,56 @@ func TestCall(t *testing.T) {
 	if m == nil {
 		t.Fatalf("got %q which does not match expected line format", s.String())
 	}
-	if m[1] != "X" {
-		t.Errorf("got %q want %q for prefix", m[1], "X")
+	if m[prefixIdx] != "X" {
+		t.Errorf("got %q want %q for prefix", m[prefixIdx], "X")
 	}
-	if m[2] != fnc {
-		t.Errorf("got %q want %q for function", m[2], fnc)
+	if m[funcNameIdx] != fnc {
+		t.Errorf("got %q want %q for function", m[funcNameIdx], fnc)
 	}
-	if m[3] != file {
-		t.Errorf("got %q want %q for file", m[3], file)
+	if m[fileNameIdx] != file {
+		t.Errorf("got %q want %q for file", m[fileNameIdx], file)
 	}
-	if lineStr := strconv.Itoa(line + 1); m[4] != lineStr {
-		t.Errorf("got %q want %q for line", m[4], lineStr)
+	if lineStr := strconv.Itoa(line + 1); m[lineNumberIdx] != lineStr {
+		t.Errorf("got %q want %q for line", m[lineNumberIdx], lineStr)
 	}
-	if m[5] != msg {
-		t.Errorf("got %q want %q for message", m[5], msg)
+	if m[logMessageIdx] != msg {
+		t.Errorf("got %q want %q for message", m[logMessageIdx], msg)
 	}
 	if s.triggers != 1 {
 		t.Errorf("got %d want %d for trigger count", s.triggers, 1)
+	}
+}
+
+// TestTZ verifies that changing the TZ changes the timestamps.
+func TestTZ(t *testing.T) {
+	s := newSink()
+	l := MakeLogger("X", s, nil)
+
+	TZ = time.FixedZone("zone1", 3600)
+	l("msg")
+	line1 := s.String()
+	m1 := matcher.FindStringSubmatch(line1)
+	if m1 == nil {
+		t.Errorf("got %q which does not match expected line format", line1)
+	}
+
+	s.data = new(bytes.Buffer)
+	TZ = time.FixedZone("zone2", -3600)
+	l("msg")
+	line2 := s.String()
+	m2 := matcher.FindStringSubmatch(line2)
+	if m2 == nil {
+		t.Errorf("got %q which does not match expected line format", line2)
+	}
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	ts1 := m1[timestampIdx]
+	ts2 := m2[timestampIdx]
+	if ts1 == ts2 {
+		t.Errorf("got equal timestamps %q for different timezones", ts1)
 	}
 }
 
@@ -152,20 +191,20 @@ func TestPrint(t *testing.T) {
 	if m == nil {
 		t.Fatalf("got %q which does not match expected line format", s.String())
 	}
-	if m[1] != "X" {
-		t.Errorf("got %q want %q for prefix", m[1], "X")
+	if m[prefixIdx] != "X" {
+		t.Errorf("got %q want %q for prefix", m[prefixIdx], "X")
 	}
-	if m[2] != fnc {
-		t.Errorf("got %q want %q for function", m[2], fnc)
+	if m[funcNameIdx] != fnc {
+		t.Errorf("got %q want %q for function", m[funcNameIdx], fnc)
 	}
-	if m[3] != file {
-		t.Errorf("got %q want %q for file", m[3], file)
+	if m[fileNameIdx] != file {
+		t.Errorf("got %q want %q for file", m[fileNameIdx], file)
 	}
-	if lineStr := strconv.Itoa(line + 1); m[4] != lineStr {
-		t.Errorf("got %q want %q for line", m[4], lineStr)
+	if lineStr := strconv.Itoa(line + 1); m[lineNumberIdx] != lineStr {
+		t.Errorf("got %q want %q for line", m[lineNumberIdx], lineStr)
 	}
-	if m[5] != msg {
-		t.Errorf("got %q want %q for message", m[5], msg)
+	if m[logMessageIdx] != msg {
+		t.Errorf("got %q want %q for message", m[logMessageIdx], msg)
 	}
 	if s.triggers != 1 {
 		t.Errorf("got %d want %d for trigger count", s.triggers, 1)
@@ -191,20 +230,20 @@ func TestPrintf(t *testing.T) {
 	if m == nil {
 		t.Fatalf("got %q which does not match expected line format", s.String())
 	}
-	if m[1] != "X" {
-		t.Errorf("got %q want %q for prefix", m[1], "X")
+	if m[prefixIdx] != "X" {
+		t.Errorf("got %q want %q for prefix", m[prefixIdx], "X")
 	}
-	if m[2] != fnc {
-		t.Errorf("got %q want %q for function", m[2], fnc)
+	if m[funcNameIdx] != fnc {
+		t.Errorf("got %q want %q for function", m[funcNameIdx], fnc)
 	}
-	if m[3] != file {
-		t.Errorf("got %q want %q for file", m[3], file)
+	if m[fileNameIdx] != file {
+		t.Errorf("got %q want %q for file", m[fileNameIdx], file)
 	}
-	if lineStr := strconv.Itoa(line + 1); m[4] != lineStr {
-		t.Errorf("got %q want %q for line", m[4], lineStr)
+	if lineStr := strconv.Itoa(line + 1); m[lineNumberIdx] != lineStr {
+		t.Errorf("got %q want %q for line", m[lineNumberIdx], lineStr)
 	}
-	if m[5] != msg {
-		t.Errorf("got %q want %q for message", m[5], msg)
+	if m[logMessageIdx] != msg {
+		t.Errorf("got %q want %q for message", m[logMessageIdx], msg)
 	}
 	if s.triggers != 1 {
 		t.Errorf("got %d want %d for trigger count", s.triggers, 1)
@@ -250,11 +289,11 @@ func TestLogTo(t *testing.T) {
 	if m == nil {
 		t.Fatalf("got %q which does not match expected line format", s1.String())
 	}
-	if m[1] != "B" {
-		t.Errorf("got %q want %q for prefix", m[1], "B")
+	if m[prefixIdx] != "B" {
+		t.Errorf("got %q want %q for prefix", m[prefixIdx], "B")
 	}
-	if m[5] != msg {
-		t.Errorf("got %q want %q for message", m[5], msg)
+	if m[logMessageIdx] != msg {
+		t.Errorf("got %q want %q for message", m[logMessageIdx], msg)
 	}
 	if s1.triggers != 1 {
 		t.Errorf("got %d want %d for s1 trigger count", s1.triggers, 1)
