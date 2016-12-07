@@ -13,9 +13,10 @@ var (
 )
 
 type detailedError struct {
-	s     string
-	stack []uintptr
-	cause error
+	s        string
+	stack    []uintptr
+	cause    error
+	original error
 }
 
 // Error returns the message associated with the detailedError.
@@ -30,6 +31,17 @@ func (e *detailedError) Stack() []uintptr {
 	return e.stack
 }
 
+// Original returns the error that produced it via NewTrace.
+//
+// A chain of NewTrace calls on successive error values will always return the
+// very first value from the chain.
+func (e *detailedError) Original() error {
+	if e.original != nil {
+		return e.original
+	}
+	return e
+}
+
 // NewTrace returns a copy of the errog with a new stack trace beginning skip
 // frames up.
 //
@@ -38,6 +50,7 @@ func (e *detailedError) NewTrace(skip int) error {
 	cp := new(detailedError)
 	*cp = *e
 	cp.stack = stackTrace(skip + 1)
+	cp.original = e.Original()
 	return cp
 }
 
@@ -115,7 +128,11 @@ type Restackable interface {
 }
 
 // NewTrace captures a new stack trace and attaches it to a copy of the given
-// error IF it is a Restackable. If not, returns the gien error.
+// error.
+//
+// If the error was not created by this package and does not implement the
+// Restackable interface, the returned error will be initialized as a new error
+// with the same description as the given error and no cause.
 //
 // skip controls where the stack trace begins. 0 starts it at the caller of
 // NewTrace.
@@ -124,7 +141,10 @@ func NewTrace(err error, skip int) error {
 	case Restackable:
 		return err.(Restackable).NewTrace(skip + 1)
 	}
-	return err
+	return &detailedError{
+		s:     err.Error(),
+		stack: stackTrace(skip + 1),
+	}
 }
 
 // A Causable has an attached cause.
@@ -141,6 +161,36 @@ func Cause(err error) error {
 		return err.(Causable).Cause()
 	}
 	return nil
+}
+
+// A Copy may have an original value that was copied and modified to produce it.
+//
+// This is used to test whether a given error may have come from a template that
+// went through NewTrace or similar.
+type Copy interface {
+	// Original returns the template used to make the error.
+	//
+	// If there is no such value, it should return the error itself.
+	Original() error
+}
+
+// Original returns the error that produced the given error.
+//
+// For example:
+//   err1 := errors.New("message")
+//   err2 := errors.NewTrace(err1, 0)
+//   err3 := errors.NewTrace(err2, 0)
+//
+// In this situation:
+//   err1 != err2 != err3
+//   err1 == errors.Original(err2) == errors.Original(err3)
+//   err2 != errors.Original(err3)
+func Original(err error) error {
+	switch err.(type) {
+	case Copy:
+		return err.(Copy).Original()
+	}
+	return err
 }
 
 // String formats and returns a full trace of the error and its cause chain.
