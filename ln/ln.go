@@ -98,6 +98,9 @@ func (l Logger) Printf(format string, a ...interface{}) (int, error) {
 // Write is a low-level function that forwards its parameter directly to the
 // io.Writer associated with the Logger.
 //
+// If the io.Writer has a `Sync() error` function (like os.File) then that is
+// called after writing.
+//
 // If the Logger has an associated trigger function, it is called after writing
 // the value.
 func (l Logger) Write(p []byte) (int, error) {
@@ -112,12 +115,23 @@ func (l Logger) Write(p []byte) (int, error) {
 //
 // The Logger will write to all of the associated writers, which can be other
 // Loggers.
-func (l Logger) LogTo(w ...io.Writer) {
+func (l Logger) LogTo(writers ...io.Writer) {
 	lg := l.getLogger()
 	if lg == nil {
 		return
 	}
+
+	var w []io.Writer
+	var s []syncWriter
+	for _, writer := range writers {
+		if sw, ok := writer.(syncWriter); ok {
+			s = append(s, sw)
+		} else {
+			w = append(w, writer)
+		}
+	}
 	lg.w = io.MultiWriter(w...)
+	lg.s = s
 }
 
 // SetTrigger changes the trigger that gets called when anything is written to
@@ -180,18 +194,43 @@ func (w PrintWriter) Write(p []byte) (int, error) {
 // Holds the data associated with a Logger.
 type logger struct {
 	prefix  string
-	w       io.Writer
+	w       io.Writer // Probably an io.MultiWriter.
+	s       []syncWriter
 	trigger func()
 }
 
-// Write writes the given message to the io.Writer associated with the logger.
+type syncWriter interface {
+	io.Writer
+	Sync() error
+}
+
+// Write writes the given message to the writers associated with the logger.
 //
 // If the logger has a trigger function, calls it after writing the message.
 func (l *logger) Write(p []byte) (n int, err error) {
-	n, err = l.w.Write(p)
-	if t := l.trigger; t != nil {
-		t()
+	defer func() {
+		if t := l.trigger; t != nil {
+			t()
+		}
+	}()
+
+	for _, s := range l.s {
+		n, err = s.Write(p)
+		if err != nil {
+			return
+		}
+		if n != len(p) {
+			err = io.ErrShortWrite
+			return
+		}
+
+		err = s.Sync()
+		if err != nil {
+			return
+		}
 	}
+
+	n, err = l.w.Write(p)
 	return
 }
 

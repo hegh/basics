@@ -2,6 +2,7 @@ package ln
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/signal"
 	"regexp"
@@ -58,6 +59,17 @@ func (s *sink) trigger()                          { s.triggers++ }
 func (s *sink) Write(p []byte) (n int, err error) { return s.data.Write(p) }
 func (s *sink) String() string                    { return s.data.String() }
 
+type sync struct {
+	*sink
+	syncs   int
+	syncErr error // Returned from Sync().
+}
+
+func (s *sync) Sync() error {
+	s.syncs++
+	return s.syncErr
+}
+
 // TestCaller verifies the caller function returns reasonable output.
 func TestCaller(t *testing.T) {
 	file, line, fnc, ok := caller(0)
@@ -70,7 +82,7 @@ func TestCaller(t *testing.T) {
 	}
 
 	// Give the line number a little leeway for future edits.
-	if line < 30 || line > 70 {
+	if line < 50 || line > 100 {
 		t.Errorf("got %d want something around 30-70 for line of caller", line)
 	}
 
@@ -371,5 +383,32 @@ func TestAbortMe(t *testing.T) {
 	case <-sigs:
 	case <-time.After(5 * time.Second):
 		t.Errorf("Timed out waiting for SIGABRT")
+	}
+}
+
+// TestSyncWriter verifies that Sync is called on those writers that have it.
+func TestSyncWriter(t *testing.T) {
+	s1 := newSink()
+	s2 := &sync{
+		sink: newSink(),
+	}
+	l := MakeLogger("X", s1, nil)
+	l.LogTo(s1, s2)
+
+	_, err := l("test")
+	if err != nil {
+		t.Errorf("unexpected error from l()", err)
+	}
+	if s2.syncs != 1 {
+		t.Errorf("got %d want %d for s2.syncs", s2.syncs, 1)
+	}
+
+	s2.syncErr = errors.New("an error")
+	_, err = l("test")
+	if s2.syncs != 2 {
+		t.Errorf("got %d want %d for s2.syncs", s2.syncs, 2)
+	}
+	if err != s2.syncErr {
+		t.Errorf("got %q want %q for error from l()", err, s2.syncErr)
 	}
 }
