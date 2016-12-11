@@ -122,16 +122,13 @@ func (l Logger) LogTo(writers ...io.Writer) {
 	}
 
 	var w []io.Writer
-	var s []syncWriter
 	for _, writer := range writers {
-		if sw, ok := writer.(syncWriter); ok {
-			s = append(s, sw)
-		} else {
-			w = append(w, writer)
+		if sw, ok := writer.(syncableWriter); ok {
+			writer = &syncWriter{sw}
 		}
+		w = append(w, writer)
 	}
 	lg.w = io.MultiWriter(w...)
-	lg.s = s
 }
 
 // SetTrigger changes the trigger that gets called when anything is written to
@@ -199,9 +196,24 @@ type logger struct {
 	trigger func()
 }
 
-type syncWriter interface {
+type syncableWriter interface {
 	io.Writer
 	Sync() error
+}
+
+// An io.Writer that syncs after each write.
+type syncWriter struct {
+	w syncableWriter
+}
+
+func (w *syncWriter) Write(p []byte) (n int, err error) {
+	n, err = w.w.Write(p)
+	if err != nil {
+		return
+	}
+
+	err = w.w.Sync()
+	return
 }
 
 // Write writes the given message to the writers associated with the logger.
@@ -213,22 +225,6 @@ func (l *logger) Write(p []byte) (n int, err error) {
 			t()
 		}
 	}()
-
-	for _, s := range l.s {
-		n, err = s.Write(p)
-		if err != nil {
-			return
-		}
-		if n != len(p) {
-			err = io.ErrShortWrite
-			return
-		}
-
-		err = s.Sync()
-		if err != nil {
-			return
-		}
-	}
 
 	n, err = l.w.Write(p)
 	return
