@@ -61,8 +61,8 @@
 // * `ln.Info("msg")` and `ln.V(0).Print("msg")` go to `infoFile`.
 //
 // Setting up output to go through a testing.T:
-//   ln.Info = ln.MakeLogger("I", ln.PrintLogger{t.Log}, nil)
-//   ln.Warning = ln.MakeLogger("W", ln.PrintLogger{t.Log}, nil)
-//   ln.Error = ln.MakeLogger("E", ln.PrintLogger{t.Error}, nil)
-//   ln.Fatal = ln.MakeLogger("F", ln.PrintLogger{t.Fatal}, nil)
+//   ln.Info = ln.MakeLogger("I", ln.PrintWriter{t.Log}, nil)
+//   ln.Warning = ln.MakeLogger("W", ln.PrintWriter{t.Log}, nil)
+//   ln.Error = ln.MakeLogger("E", ln.PrintWriter{t.Error}, nil)
+//   ln.Fatal = ln.MakeLogger("F", ln.PrintWriter{t.Fatal}, nil)
 package ln
