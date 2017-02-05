@@ -3,9 +3,6 @@ the standard library.
 
 # Components
 
-* [errors](##errors)
-* [ln](##ln)
-
 ## errors - Errors with stack traces and causes
 
 A drop-in replacement for the Golang `errors` package, and `fmt.Errorf`. As long
@@ -166,3 +163,23 @@ package, configure logging.
 If you are not in full control of your codebase and pieces outside your control
 want to log during `init` then we will need to add special flag-based
 configuration to `ln` itself. But I am hoping that this won't be necessary.
+
+
+## todo - Filler for functions that haven't been written yet
+
+If you are writing new code, and want to test it as you go, the `todo` package
+provides a couple of methods to fill in functions you haven't written yet.
+
+### Error - Returns an error
+
+    return todo.Error()
+
+The returned error will look like this:
+
+    TODO: implement func FunctionName at filename.go:123
+
+### Panic - Panics
+
+    todo.Panic()
+
+The `panic` value is the same error that would have been returned by `Error`.
