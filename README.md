@@ -3,6 +3,10 @@ the standard library.
 
 # Components
 
+* [errors](#errors---errors-with-stack-traces-and-causes) - Errors with stack traces and causes
+* [ln](#ln---a-logging-package-with-a-natural-interface) - A logging package with a natural interface
+* [todo](#todo---filler-for-functions-that-havent-been-written-yet) - Filler for functions that haven't been written yet
+
 ## errors - Errors with stack traces and causes
 
 A drop-in replacement for the Golang `errors` package, and `fmt.Errorf`. As long
