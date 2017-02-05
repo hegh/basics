@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hegh/basics/errors"
 )
 
 var (
@@ -91,6 +93,7 @@ func (l Logger) Printf(format string, a ...interface{}) (int, error) {
 		return 0, nil
 	}
 
+	replaceErrors(a)
 	message := assemble(1, lg.prefix, fmt.Sprintf(format, a...))
 	return lg.Write(message)
 }
@@ -384,4 +387,13 @@ func packageVerbosity(skip int) (v int, ok bool) {
 
 	v, ok = PackageVerbosity[short]
 	return
+}
+
+// Replaces any error `err` in the given slice with `errors.String(err)`.
+func replaceErrors(a []interface{}) {
+	for i, v := range a {
+		if err, ok := v.(error); ok {
+			a[i] = errors.String(err)
+		}
+	}
 }

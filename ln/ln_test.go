@@ -2,7 +2,6 @@ package ln
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"os/signal"
 	"regexp"
@@ -11,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/hegh/basics/errors"
 )
 
 // If the file or package gets renamed, update these constants.
@@ -410,5 +411,22 @@ func TestSyncWriter(t *testing.T) {
 	}
 	if err != s2.syncErr {
 		t.Errorf("got %q want %q for error from l()", err, s2.syncErr)
+	}
+}
+
+func TestReplaceErrors(t *testing.T) {
+	err := errors.Errorf("message")
+	s := []interface{}{"hello", err, 1}
+	replaceErrors(s)
+	if s[0].(string) != "hello" {
+		t.Errorf("got %q want %q for s[0] after replaceErrors", s[0], "hello")
+	}
+	if s[2].(int) != 1 {
+		t.Errorf("got %q want %q for s[2] after replaceErrors", s[2], 1)
+	}
+
+	re := regexp.MustCompile(`(?ms:^message$.*ln\.TestReplaceErrors\(\)$.*ln_test.go.*$.*)`)
+	if !re.MatchString(s[1].(string)) {
+		t.Errorf("expected %q to match\n%v", re, s[1])
 	}
 }
