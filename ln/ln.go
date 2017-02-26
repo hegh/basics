@@ -1,6 +1,7 @@
 package ln
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -176,7 +177,7 @@ func NilLogger() Logger {
 // the logging functions on testing.T (they do not return anything).
 //
 // The byte slice passed to the Write function is converted to a string and
-// forwarded to the given Print function.
+// forwarded to the given Print function, removing up to one trailing newline.
 //
 // To use a Logger backed by a testing.T, set it up like this:
 //   Info.LogTo(PrintWriter{t.Log})
@@ -187,7 +188,7 @@ type PrintWriter struct {
 // Write converts the given byte slice to a string and prints it to the Print
 // function backing the PrintWriter.
 func (w PrintWriter) Write(p []byte) (int, error) {
-	w.P(string(p))
+	w.P(string(bytes.TrimSuffix(p, []byte("\n"))))
 	return len(p), nil
 }
 
