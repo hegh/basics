@@ -93,15 +93,14 @@ The package also provides built-in `Warning`, `Error`, and `Fatal` loggers.
 
 ### Logging errors
 
-    ln.Info("Error: %v", errors.New("message"))
+    ln.Info.Printf("Error: %v", errors.New("message"))
 
 Errors passed to the formatted output functions get passed through the
 `basics/errors` package's `String` method, which expands stack traces when they
 are available.
 
-Although possible, this may cause some unexpected weirdness around format string
-arguments that expect the `error` type, as the type given to `fmt.Sprintf` will
-actually be `string`.
+Note that this means a `string` is being passed to `fmt.Sprintf` instead of an
+`error`, not that it should make any difference.
 
 ### Verbosity control
 
