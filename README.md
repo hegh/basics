@@ -125,6 +125,8 @@ Output can be sent to any number of `io.Writer` implementations. A logger is
 itself a writer, so you can direct loggers at each other (just don't make a
 cycle).
 
+By default, all loggers write to `os.Stderr`.
+
 ### Send to a testing.T
 
     ln.Info.LogTo(ln.PrintWriter{t.Log})
