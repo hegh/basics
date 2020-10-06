@@ -398,7 +398,7 @@ func TestSyncWriter(t *testing.T) {
 
 	_, err := l("test")
 	if err != nil {
-		t.Errorf("unexpected error from l()", err)
+		t.Errorf("unexpected error from l(): %v", err)
 	}
 	if s2.syncs != 1 {
 		t.Errorf("got %d want %d for s2.syncs", s2.syncs, 1)
