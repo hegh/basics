@@ -6,6 +6,7 @@ the standard library.
 * [ln](#ln---a-logging-package-with-a-natural-interface) - A logging package with a natural interface
 * [refcount](#refcount---for-refcounting-expensive-resources) - For refcounting expensive resources
 * [todo](#todo---filler-for-functions-that-havent-been-written-yet) - Filler for functions that haven't been written yet
+* [writecounter](#writecounter---a-writer-that-counts-bytes-written) - A writer that counts bytes written
 
 Deprecated:
 
@@ -171,6 +172,20 @@ The returned error will look like this:
     todo.Panic()
 
 The `panic` value is the same error that would have been returned by `Error`.
+
+## writecounter - A writer that counts bytes written
+
+That's pretty much it. Wrap your `io.Writer` in a `writecounter.Writer` and it
+will simply count the number of bytes that you've written.
+
+This can be especially useful when writing to files with to avoid repeated calls
+to `Seek`. It also improves testability, because the lack of `Seek` calls means
+your test code doesn't need to use real files.
+
+As a bonus, I've found that the ability to write simple integers directly to the
+writer as bytes is very handy, so it includes a wrapper around `binary.Write`.
+You can just use `WriteValue` for those now. Set the byte order in
+`Writer.ByteOrder` (default is BigEndian).
 
 ## errors - (Deprecated) Errors with stack traces and causes
 
