@@ -4,8 +4,12 @@ the standard library.
 # Components
 
 * [ln](#ln---a-logging-package-with-a-natural-interface) - A logging package with a natural interface
+* [refcount](#refcount---for-refcounting-expensive-resources) - For refcounting expensive resources
 * [todo](#todo---filler-for-functions-that-havent-been-written-yet) - Filler for functions that haven't been written yet
-* [errors](#errors---errors-with-stack-traces-and-causes) - (Deprecated) Errors with stack traces and causes
+
+Deprecated:
+
+* [errors](#errors---errors-with-stack-traces-and-causes) - Errors with stack traces and causes
 
 ## ln - A logging package with a natural interface
 
@@ -116,6 +120,38 @@ If you are not in full control of your codebase and pieces outside your control
 want to log during `init` then we will need to add special flag-based
 configuration to `ln` itself. But I am hoping that this won't be necessary.
 
+
+## refcount - For refcounting expensive resources
+
+If you want to release a resource after all users of it are finished, and you
+don't want to hold multiple copies of it open at the same time, reference
+counting is a good strategy. This package provides a basic implementation.
+
+For example, let's say you want to service concurrent data requests by reading
+random-access sections from a set of files. You don't want to hold the same file
+open from multiple routines, and you don't want to hold all of the files open at
+the same time. This package will help you hold files open only as long as they
+are actively being used.
+
+This is meant to be an internal feature of your object, not exposed to users.
+
+To use:
+
+ 1. Include a `*refcount.RefCount` in your object.
+ 2. Write `Opener` and `Closer` functions that manage the lifecycle of the
+    resource that you want to control. The `Opener` will be called when the
+    resource was not open, but is required to fulfill a request. The `Closer`
+    will be closed when all concurrent requests have been fulfilled and the
+    resource is no longer needed.
+ 3. Initialize the `*RefCount` object using the `Opener` and `Closer` in your
+    `New` function.
+ 4. When a new request arrives, call `Increment` on the `RefCount` object. This
+    may cause the `Opener` to be called. Associate the returned `io.Closer` with
+    the request, so when it is complete its `Close` method will be closed.
+ 5. Make sure to call the `Close` method of the returned `io.Closer` when the
+    request is finished. This may cause the `Closer` function to be called.
+
+See the file comment in refcount/refcount.go for an example.
 
 ## todo - Filler for functions that haven't been written yet
 
