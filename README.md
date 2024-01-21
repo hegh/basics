@@ -3,62 +3,9 @@ the standard library.
 
 # Components
 
-* [errors](#errors---errors-with-stack-traces-and-causes) - Errors with stack traces and causes
 * [ln](#ln---a-logging-package-with-a-natural-interface) - A logging package with a natural interface
 * [todo](#todo---filler-for-functions-that-havent-been-written-yet) - Filler for functions that haven't been written yet
-
-## errors - Errors with stack traces and causes
-
-A drop-in replacement for the Golang `errors` package, and `fmt.Errorf`. As long
-as you use the fuctions provided by this package, errors will have causes
-and stack traces tracked across message formatting.
-
-The important parts of the interface are:
-
-### New - Build a new error
-
-    errors.New("error description")
-
-A drop-in replacement for the Golang standard library `errors.New` function.
-
-Returns an `error` whose `Error` function will return the given message. The
-error will have an attached stack trace that starts at the caller of `New`.
-
-To print the error message with its stack trace:
-
-    fmt.Println(errors.String(err))
-
-### Errorf - Format and capture a cause
-
-    errors.Errorf("function foo failed: %v", err)
-
-A drop-in replacement for the Golang standard library `fmt.Errorf` function.
-
-Returns an `error` whose `Error` function will return the given formatted
-message. The error will have an attached stack trace that starts at the caller
-of `Errorf`, and an attached cause equal to `err` (the last `error` passed in the
-format args).
-
-To print the error message with its stack trace and cause chain:
-
-    fmt.Println(errors.String(err))
-
-### NewTrace - Copy an error and capture a new stack trace
-
-    errors.NewTrace(err, 0)
-
-Attaches a new stack trace to an existing error, returning a new value and
-leaving the original unmodified. The start of the new stack trace is controlled
-by the second parameter, `skip`. When `skip` is 0, the trace begins with the
-caller of `NewTrace`.
-
-This is useful if you want to have a template error at the package level, and
-return copies of it with unique stack traces.
-
-To test whether a given error originated with your template error:
-
-    template == errors.Original(err)
-
+* [errors](#errors---errors-with-stack-traces-and-causes) - (Deprecated) Errors with stack traces and causes
 
 ## ln - A logging package with a natural interface
 
@@ -188,3 +135,62 @@ The returned error will look like this:
     todo.Panic()
 
 The `panic` value is the same error that would have been returned by `Error`.
+
+## errors - (Deprecated) Errors with stack traces and causes
+
+Deprecated in favor of the new Golang `errors` package with the `%w` format
+directive, although that is still missing stack traces. I may revisit this to
+update it to work with the newer `errors`, but I've basically stopped using it
+myself.
+
+A drop-in replacement for the Golang `errors` package, and `fmt.Errorf`. As long
+as you use the fuctions provided by this package, errors will have causes
+and stack traces tracked across message formatting.
+
+The important parts of the interface are:
+
+### New - Build a new error
+
+    errors.New("error description")
+
+A drop-in replacement for the Golang standard library `errors.New` function.
+
+Returns an `error` whose `Error` function will return the given message. The
+error will have an attached stack trace that starts at the caller of `New`.
+
+To print the error message with its stack trace:
+
+    fmt.Println(errors.String(err))
+
+### Errorf - Format and capture a cause
+
+    errors.Errorf("function foo failed: %v", err)
+
+A drop-in replacement for the Golang standard library `fmt.Errorf` function.
+
+Returns an `error` whose `Error` function will return the given formatted
+message. The error will have an attached stack trace that starts at the caller
+of `Errorf`, and an attached cause equal to `err` (the last `error` passed in the
+format args).
+
+To print the error message with its stack trace and cause chain:
+
+    fmt.Println(errors.String(err))
+
+### NewTrace - Copy an error and capture a new stack trace
+
+    errors.NewTrace(err, 0)
+
+Attaches a new stack trace to an existing error, returning a new value and
+leaving the original unmodified. The start of the new stack trace is controlled
+by the second parameter, `skip`. When `skip` is 0, the trace begins with the
+caller of `NewTrace`.
+
+This is useful if you want to have a template error at the package level, and
+return copies of it with unique stack traces.
+
+To test whether a given error originated with your template error:
+
+    template == errors.Original(err)
+
+
