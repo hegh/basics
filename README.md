@@ -4,6 +4,7 @@ the standard library.
 # Components
 
 * [ln](#ln---a-logging-package-with-a-natural-interface) - A logging package with a natural interface
+* [lru](#lru---an-lru-cache) - An LRU cache with a read-through interface
 * [refcount](#refcount---for-refcounting-expensive-resources) - For refcounting expensive resources
 * [todo](#todo---filler-for-functions-that-havent-been-written-yet) - Filler for functions that haven't been written yet
 * [writecounter](#writecounter---a-writer-that-counts-bytes-written) - A writer that counts bytes written
@@ -121,6 +122,16 @@ If you are not in full control of your codebase and pieces outside your control
 want to log during `init` then we will need to add special flag-based
 configuration to `ln` itself. But I am hoping that this won't be necessary.
 
+
+## lru - An LRU cache
+
+A simple read-through cache with least-recently-used eviction semantics.
+
+All you need to provide is a retriever function to look up values associated
+with keys, and a maximum cache size. Optionally, you can also provide a
+function to be called on eviction.
+
+See cache/lru/lru.go for usage instructions.
 
 ## refcount - For refcounting expensive resources
 
