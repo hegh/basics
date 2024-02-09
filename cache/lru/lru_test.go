@@ -9,15 +9,15 @@ func TestGetCachedEntry(t *testing.T) {
 	// Verify cached entries are retrieved from the cache.
 	one, two := "one", "two"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 
@@ -27,8 +27,8 @@ func TestGetCachedEntry(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	if v, err := c.Get(1); err != nil {
@@ -36,8 +36,8 @@ func TestGetCachedEntry(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 { // Hasn't increased.
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want { // Hasn't increased.
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Try 2, twice
@@ -46,8 +46,8 @@ func TestGetCachedEntry(t *testing.T) {
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	if v, err := c.Get(2); err != nil {
@@ -55,8 +55,8 @@ func TestGetCachedEntry(t *testing.T) {
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 { // Hasn't increased.
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want { // Hasn't increased.
+		t.Errorf("got %v want %v calls", got, want)
 	}
 }
 
@@ -66,19 +66,19 @@ func TestErrorNotInserted(t *testing.T) {
 	one, two := "one", "two"
 	calls := 0
 	var fail bool
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		if fail {
-			return nil, fmt.Errorf("told to fail")
+			return nil, 0, fmt.Errorf("told to fail")
 		}
 
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 
@@ -87,8 +87,8 @@ func TestErrorNotInserted(t *testing.T) {
 	if _, err := c.Get(1); err == nil {
 		t.Errorf("expected error %v", err)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Succeed inserting 1, and make sure it required another call.
@@ -98,8 +98,8 @@ func TestErrorNotInserted(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 { // Hasn't increased.
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want { // Hasn't increased.
+		t.Errorf("got %v want %v calls", got, want)
 	}
 }
 
@@ -107,17 +107,17 @@ func TestEvictOldEntry(t *testing.T) {
 	// Verify old entries get evicted.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		case 3:
-			return three, nil
+			return three, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 
@@ -127,16 +127,16 @@ func TestEvictOldEntry(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if v, err := c.Get(2); err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Evict entry 1 by inserting 3.
@@ -145,8 +145,8 @@ func TestEvictOldEntry(t *testing.T) {
 	} else if v != three {
 		t.Errorf("got %v want %v", v, one)
 	}
-	if calls != 3 {
-		t.Errorf("got %v want 3 calls", calls)
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Try to get 1 again, make sure it is re-retrieved.
@@ -155,8 +155,8 @@ func TestEvictOldEntry(t *testing.T) {
 	} else if v != one {
 		t.Errorf("got %v want %v", v, one)
 	}
-	if calls != 4 {
-		t.Errorf("got %v want 4 calls", calls)
+	if got, want := calls, 4; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 }
 
@@ -164,21 +164,22 @@ func TestEvictCallsEvict(t *testing.T) {
 	// Verify that cache eviction calls the OnEvict function.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		case 3:
-			return three, nil
+			return three, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 
 	// Populate the cache.
@@ -187,16 +188,16 @@ func TestEvictCallsEvict(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if v, err := c.Get(2); err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Evict entry 1 by inserting 3.
@@ -215,8 +216,8 @@ func TestEvictCallsEvict(t *testing.T) {
 	} else if v != three {
 		t.Errorf("got %v want %v", v, one)
 	}
-	if calls != 3 {
-		t.Errorf("got %v want 3 calls", calls)
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if !evicted {
 		t.Errorf("value not evicted")
@@ -238,8 +239,8 @@ func TestEvictCallsEvict(t *testing.T) {
 	} else if v != one {
 		t.Errorf("got %v want %v", v, one)
 	}
-	if calls != 4 {
-		t.Errorf("got %v want 4 calls", calls)
+	if got, want := calls, 4; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if !evicted {
 		t.Errorf("value not evicted")
@@ -251,21 +252,22 @@ func TestAccessPromotesEntry(t *testing.T) {
 	// is not the next evicted.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		case 3:
-			return three, nil
+			return three, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 
 	// Populate the cache.
@@ -274,16 +276,16 @@ func TestAccessPromotesEntry(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if v, err := c.Get(2); err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Retrieve 1 again so it is not the least recently used.
@@ -292,8 +294,8 @@ func TestAccessPromotesEntry(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Evict entry 2 by inserting 3.
@@ -312,8 +314,8 @@ func TestAccessPromotesEntry(t *testing.T) {
 	} else if v != three {
 		t.Errorf("got %v want %v", v, one)
 	}
-	if calls != 3 {
-		t.Errorf("got %v want 3 calls", calls)
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if !evicted {
 		t.Errorf("value not evicted")
@@ -324,21 +326,22 @@ func TestClear(t *testing.T) {
 	// Verify that clearing the cache actually clears it.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		case 3:
-			return three, nil
+			return three, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 
 	// Populate the cache.
@@ -347,16 +350,16 @@ func TestClear(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if v, err := c.Get(2); err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Clear the cache.
@@ -372,7 +375,8 @@ func TestClear(t *testing.T) {
 	// Make sure retrieving entries requires new lookups. Nothing new should be
 	// evicted.
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 
 	// First 1, because it was already have present but should be gone.
@@ -381,8 +385,8 @@ func TestClear(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 3 {
-		t.Errorf("got %v want 3 calls", calls)
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Then 3, because it was not present, and this shouldn't cause eviction.
@@ -391,8 +395,8 @@ func TestClear(t *testing.T) {
 	} else if got, want := v, three; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 4 {
-		t.Errorf("got %v want 4 calls", calls)
+	if got, want := calls, 4; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 }
 
@@ -400,21 +404,22 @@ func TestIncreaseMaxEntries(t *testing.T) {
 	// Verify we can increase MaxEntries on the fly.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(1, func(key Key) (interface{}, error) {
+	c := New(1, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		case 3:
-			return three, nil
+			return three, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 
 	// Populate the cache.
@@ -423,8 +428,8 @@ func TestIncreaseMaxEntries(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// 2 should evict 1.
@@ -443,23 +448,27 @@ func TestIncreaseMaxEntries(t *testing.T) {
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if !evicted {
+		t.Errorf("expected an eviction")
 	}
 
 	// Increase the capacity, and make sure 1 gets re-read, and nothing gets
 	// evicted.
-	c.MaxEntries = 3
+	c.MaxCost = 3
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 	if v, err := c.Get(1); err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 3 {
-		t.Errorf("got %v want 3 calls", calls)
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	if v, err := c.Get(3); err != nil {
@@ -467,8 +476,8 @@ func TestIncreaseMaxEntries(t *testing.T) {
 	} else if got, want := v, three; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 4 {
-		t.Errorf("got %v want 4 calls", calls)
+	if got, want := calls, 4; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 }
 
@@ -476,21 +485,22 @@ func TestDecreaseMaxEntries(t *testing.T) {
 	// Verify we can decrease MaxEntries on the fly.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, error) {
+	c := New(2, func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
-			return one, nil
+			return one, 1, nil
 		case 2:
-			return two, nil
+			return two, 1, nil
 		case 3:
-			return three, nil
+			return three, 1, nil
 		default:
-			return nil, fmt.Errorf("bad key %v", key)
+			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
 	})
 	c.OnEvict = func(key Key, value interface{}) {
-		t.Errorf("unexpected eviction of key %v value %v", key, value)
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
 	}
 
 	// Populate the cache.
@@ -499,25 +509,25 @@ func TestDecreaseMaxEntries(t *testing.T) {
 	} else if got, want := v, one; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 1 {
-		t.Errorf("got %v want 1 calls", calls)
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 	if v, err := c.Get(2); err != nil {
 		t.Errorf("unexpected error %v", err)
 	} else if got, want := v, two; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 2 {
-		t.Errorf("got %v want 2 calls", calls)
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
 
 	// Reduce the max size.
-	c.MaxEntries = 1
+	c.MaxCost = 1
 
 	// The next new Get should evict 1 and 2.
-	evicted := 0
+	evictions := 0
 	c.OnEvict = func(key Key, value interface{}) {
-		evicted++
+		evictions++
 		if got, want1, want2 := key, 1, 2; got != want1 && got != want2 {
 			t.Errorf("got %v want %v or %v as evicted key", got, want1, want2)
 		}
@@ -531,10 +541,180 @@ func TestDecreaseMaxEntries(t *testing.T) {
 	} else if got, want := v, three; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if calls != 3 {
-		t.Errorf("got %v want 3 calls", calls)
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
 	}
-	if got, want := evicted, 2; got != want {
-		t.Errorf("got %d want %d evictions", got, want)
+	if got, want := evictions, 2; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+}
+
+func TestCostBasedEviction(t *testing.T) {
+	// Verify values are evicted based on cost.
+	one, two, three := "one", "two", "three"
+
+	// 6 is big enough to hold one and two, or three, but not three and any other
+	// value.
+	calls := 0
+	c := New(6, func(key Key) (interface{}, Cost, error) {
+		calls++
+		switch key.(int) {
+		case 1:
+			return one, Cost(len(one)), nil
+		case 2:
+			return two, Cost(len(two)), nil
+		case 3:
+			return three, Cost(len(three)), nil
+		default:
+			return nil, 0, fmt.Errorf("bad key %v", key)
+		}
+	})
+
+	evictions := 0
+	c.OnEvict = func(Key, interface{}) { evictions++ }
+
+	// Populate the cache.
+	if v, err := c.Get(1); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, one; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 0; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	if v, err := c.Get(2); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, two; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 0; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	// Inserting 3 should evict both 1 and 2.
+	if v, err := c.Get(3); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, three; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 2; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	// Getting 1 should evict 3.
+	if v, err := c.Get(1); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, one; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 4; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 3; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	// Getting 2 should not evict anything.
+	c.OnEvict = func(key Key, value interface{}) {
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
+	}
+	if v, err := c.Get(2); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, two; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 5; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 3; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+}
+
+func TestJumboEntry(t *testing.T) {
+	// Verify the cache will hold onto a single jumbo entry.
+	one, two, three := "one", "two", "three"
+
+	// 4 is big enough to hold one or two, but not three unless it's the
+	// singular jumbo entry.
+	calls := 0
+	c := New(4, func(key Key) (interface{}, Cost, error) {
+		calls++
+		switch key.(int) {
+		case 1:
+			return one, Cost(len(one)), nil
+		case 2:
+			return two, Cost(len(two)), nil
+		case 3:
+			return three, Cost(len(three)), nil
+		default:
+			return nil, 0, fmt.Errorf("bad key %v", key)
+		}
+	})
+
+	evictions := 0
+	c.OnEvict = func(Key, interface{}) { evictions++ }
+
+	// Populate the cache.
+	if v, err := c.Get(1); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, one; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 1; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 0; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	// Inserting 3 should evict 1.
+	if v, err := c.Get(3); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, three; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 1; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	// 3 should remain in the cache, so no change by getting it again.
+	if v, err := c.Get(3); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, three; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 2; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 1; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
+	}
+
+	// Getting 1 should evict 3.
+	if v, err := c.Get(1); err != nil {
+		t.Errorf("unexpected error %v", err)
+	} else if got, want := v, one; got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, want := calls, 3; got != want {
+		t.Errorf("got %v want %v calls", got, want)
+	}
+	if got, want := evictions, 2; got != want {
+		t.Errorf("got %v want %v evictions", got, want)
 	}
 }
