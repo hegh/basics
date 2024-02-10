@@ -193,9 +193,11 @@ func (c *Cache) Clear() {
 }
 
 // EvictOldest evicts the least recently used entry from the cache.
-func (c *Cache) EvictOldest() {
+//
+// Returns the value evicted, or nil if the cache was empty.
+func (c *Cache) EvictOldest() interface{} {
 	if len(c.entries) == 0 {
-		return
+		return nil
 	}
 
 	value := c.list.Remove(c.list.Front()).(*cell)
@@ -204,6 +206,7 @@ func (c *Cache) EvictOldest() {
 	if c.OnEvict != nil {
 		c.OnEvict(value.key, value.value)
 	}
+	return value.value
 }
 
 // Evict evicts a specific entry from the cache.
@@ -211,10 +214,12 @@ func (c *Cache) EvictOldest() {
 // Does nothing if the entry does not exist in the cache.
 //
 // Calls the OnEvict function if there is one.
-func (c *Cache) Evict(key Key) {
+//
+// Returns the value evicted, or nil.
+func (c *Cache) Evict(key Key) interface{} {
 	entry, ok := c.entries[key]
 	if !ok {
-		return
+		return nil
 	}
 
 	value := entry.Value.(*cell)
@@ -223,4 +228,5 @@ func (c *Cache) Evict(key Key) {
 	if c.OnEvict != nil {
 		c.OnEvict(value.key, value.value)
 	}
+	return value.value
 }

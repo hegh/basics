@@ -164,7 +164,7 @@ func TestEvictOldEntry(t *testing.T) {
 	}
 }
 
-func TestEvictCallsEvict(t *testing.T) {
+func TestEvictionCallsOnEvict(t *testing.T) {
 	// Verify that cache eviction calls the OnEvict function.
 	one, two, three := "one", "two", "three"
 	calls := 0
@@ -769,7 +769,7 @@ func TestEvictOldest(t *testing.T) {
 		t.Errorf("got %v want %v calls", got, want)
 	}
 
-	// Manually evict the oldest entry.
+	// Manually evict the oldest entry (1).
 	evicted := false
 	c.OnEvict = func(key Key, value interface{}) {
 		evicted = true
@@ -780,7 +780,9 @@ func TestEvictOldest(t *testing.T) {
 			t.Errorf("got %v want %v as evicted value", got, want)
 		}
 	}
-	c.EvictOldest()
+	if got, want := c.EvictOldest(), one; got != want {
+		t.Errorf("got %v want %v from EvictOldest", got, want)
+	}
 	if !evicted {
 		t.Errorf("expected eviction")
 	}
@@ -846,7 +848,9 @@ func TestEvictEntry(t *testing.T) {
 			t.Errorf("got %v want %v as evicted value", got, want)
 		}
 	}
-	c.Evict(2)
+	if got, want := c.Evict(2), two; got != want {
+		t.Errorf("got %v want %v from Evict", got, want)
+	}
 	if !evicted {
 		t.Errorf("expected eviction")
 	}
@@ -878,7 +882,9 @@ func TestPut(t *testing.T) {
 			t.Errorf("got %v want %v as evicted value", got, want)
 		}
 	}
-	c.Evict(2)
+	if got, want := c.Evict(2), two; got != want {
+		t.Errorf("got %v want %v from Evict", got, want)
+	}
 	if !evicted {
 		t.Errorf("expected eviction")
 	}
@@ -894,7 +900,9 @@ func TestPut(t *testing.T) {
 			t.Errorf("got %v want %v as evicted value", got, want)
 		}
 	}
-	c.Evict(1)
+	if got, want := c.Evict(1), one; got != want {
+		t.Errorf("got %v want %v from Evict", got, want)
+	}
 	if !evicted {
 		t.Errorf("expected eviction")
 	}
@@ -934,7 +942,9 @@ func TestPutRefreshesEntry(t *testing.T) {
 			t.Errorf("got %v want %v as evicted value", got, want)
 		}
 	}
-	c.EvictOldest()
+	if got, want := c.EvictOldest(), two; got != want {
+		t.Errorf("got %v want %v from EvictOldest", got, want)
+	}
 	if !evicted {
 		t.Errorf("expected eviction")
 	}
@@ -1025,11 +1035,15 @@ func TestGetCostOverflowPanics(t *testing.T) {
 func TestEvictOldestOnEmptyCache(t *testing.T) {
 	// Verify EvictOldest is a no-op on an empty cache.
 	c := New(100)
-	c.EvictOldest()
+	if got, want := c.EvictOldest(), (interface{})(nil); got != want {
+		t.Errorf("got %v want %v from EvictOldest", got, want)
+	}
 }
 
 func TestEvictMissingEntry(t *testing.T) {
 	// Verify Evict on a missing entry is a no-op.
 	c := New(100)
-	c.Evict(1)
+	if got, want := c.Evict(1), (interface{})(nil); got != want {
+		t.Errorf("got %v want %v from Evict", got, want)
+	}
 }
