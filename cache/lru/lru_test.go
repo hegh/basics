@@ -13,7 +13,8 @@ func TestGetCachedEntry(t *testing.T) {
 	// Verify cached entries are retrieved from the cache.
 	one, two := "one", "two"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -23,7 +24,7 @@ func TestGetCachedEntry(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	// Try 1, twice
 	if v, err := c.Get(1); err != nil {
@@ -70,7 +71,8 @@ func TestErrorNotInserted(t *testing.T) {
 	one, two := "one", "two"
 	calls := 0
 	var fail bool
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		if fail {
 			return nil, 0, fmt.Errorf("told to fail")
@@ -84,7 +86,7 @@ func TestErrorNotInserted(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	// Fail inserting 1.
 	fail = true
@@ -111,7 +113,8 @@ func TestEvictOldEntry(t *testing.T) {
 	// Verify old entries get evicted.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -123,7 +126,7 @@ func TestEvictOldEntry(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	// Populate the cache.
 	if v, err := c.Get(1); err != nil {
@@ -168,7 +171,8 @@ func TestEvictCallsEvict(t *testing.T) {
 	// Verify that cache eviction calls the OnEvict function.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -180,7 +184,7 @@ func TestEvictCallsEvict(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -256,7 +260,8 @@ func TestAccessPromotesEntry(t *testing.T) {
 	// is not the next evicted.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -268,7 +273,7 @@ func TestAccessPromotesEntry(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -330,7 +335,8 @@ func TestClear(t *testing.T) {
 	// Verify that clearing the cache actually clears it.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -342,7 +348,7 @@ func TestClear(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -408,7 +414,8 @@ func TestIncreaseMaxEntries(t *testing.T) {
 	// Verify we can increase MaxEntries on the fly.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(1, func(key Key) (interface{}, Cost, error) {
+	c := New(1)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -420,7 +427,7 @@ func TestIncreaseMaxEntries(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -489,7 +496,8 @@ func TestDecreaseMaxEntries(t *testing.T) {
 	// Verify we can decrease MaxEntries on the fly.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(2, func(key Key) (interface{}, Cost, error) {
+	c := New(2)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -501,7 +509,7 @@ func TestDecreaseMaxEntries(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -560,7 +568,8 @@ func TestCostBasedEviction(t *testing.T) {
 	// 6 is big enough to hold one and two, or three, but not three and any other
 	// value.
 	calls := 0
-	c := New(6, func(key Key) (interface{}, Cost, error) {
+	c := New(6)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -572,7 +581,7 @@ func TestCostBasedEviction(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	evictions := 0
 	c.OnEvict = func(Key, interface{}) { evictions++ }
@@ -653,7 +662,8 @@ func TestJumboEntry(t *testing.T) {
 	// 4 is big enough to hold one or two, but not three unless it's the
 	// singular jumbo entry.
 	calls := 0
-	c := New(4, func(key Key) (interface{}, Cost, error) {
+	c := New(4)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -665,7 +675,7 @@ func TestJumboEntry(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	evictions := 0
 	c.OnEvict = func(Key, interface{}) { evictions++ }
@@ -727,7 +737,8 @@ func TestEvictOldest(t *testing.T) {
 	// Verify we can directly call EvictOldest and get the right behavior.
 	one, two := "one", "two"
 	calls := 0
-	c := New(100, func(key Key) (interface{}, Cost, error) {
+	c := New(100)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -737,7 +748,7 @@ func TestEvictOldest(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -782,7 +793,8 @@ func TestEvictEntry(t *testing.T) {
 	// Verify we can evict a specific entry.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(100, func(key Key) (interface{}, Cost, error) {
+	c := New(100)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		calls++
 		switch key.(int) {
 		case 1:
@@ -794,7 +806,7 @@ func TestEvictEntry(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -847,19 +859,7 @@ func TestPut(t *testing.T) {
 	// Verify we can manually add an entry to the cache.
 	one, two, three := "one", "two", "three"
 	calls := 0
-	c := New(100, func(key Key) (interface{}, Cost, error) {
-		calls++
-		switch key.(int) {
-		case 1:
-			return one, 1, nil
-		case 2:
-			return two, 1, nil
-		case 3:
-			return three, 1, nil
-		default:
-			return nil, 0, fmt.Errorf("bad key %v", key)
-		}
-	})
+	c := New(100)
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
 		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
@@ -920,14 +920,7 @@ func TestPut(t *testing.T) {
 func TestPutNegativeCostPanics(t *testing.T) {
 	// Verify that negative cost through Put panics.
 	one := "one"
-	c := New(100, func(key Key) (interface{}, Cost, error) {
-		switch key.(int) {
-		case 1:
-			return one, 1, nil
-		default:
-			return nil, 0, fmt.Errorf("bad key %v", key)
-		}
-	})
+	c := New(100)
 
 	defer func() {
 		if err := recover(); err == nil {
@@ -940,14 +933,15 @@ func TestPutNegativeCostPanics(t *testing.T) {
 func TestGetNegativeCostPanics(t *testing.T) {
 	// Verify that negative cost from retriever panics.
 	one := "one"
-	c := New(100, func(key Key) (interface{}, Cost, error) {
+	c := New(100)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		switch key.(int) {
 		case 1:
 			return one, -10, nil
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	defer func() {
 		if err := recover(); err == nil {
@@ -960,16 +954,7 @@ func TestGetNegativeCostPanics(t *testing.T) {
 func TestPutCostOverflowPanics(t *testing.T) {
 	// Verify that costs through Put adding to more than math.MaxInt64 panics.
 	one, two := "one", "two"
-	c := New(100, func(key Key) (interface{}, Cost, error) {
-		switch key.(int) {
-		case 1:
-			return one, math.MaxInt64/2 + 1, nil
-		case 2:
-			return two, math.MaxInt64/2 + 1, nil
-		default:
-			return nil, 0, fmt.Errorf("bad key %v", key)
-		}
-	})
+	c := New(100)
 
 	// Populate the cache.
 	c.Put(1, math.MaxInt64/2+1, one)
@@ -986,7 +971,8 @@ func TestPutCostOverflowPanics(t *testing.T) {
 func TestGetCostOverflowPanics(t *testing.T) {
 	// Verify that costs from retriever adding to more than math.MaxInt64 panics.
 	one, two := "one", "two"
-	c := New(100, func(key Key) (interface{}, Cost, error) {
+	c := New(100)
+	c.OnRetrieve = func(key Key) (interface{}, Cost, error) {
 		switch key.(int) {
 		case 1:
 			return one, math.MaxInt64/2 + 1, nil
@@ -995,7 +981,7 @@ func TestGetCostOverflowPanics(t *testing.T) {
 		default:
 			return nil, 0, fmt.Errorf("bad key %v", key)
 		}
-	})
+	}
 
 	// Populate the cache.
 	if v, err := c.Get(1); err != nil {

@@ -1,26 +1,46 @@
-// Package lru provides a basic least-recently-used cache.
+// Package lru provides a basic least-recently-used cache. It can be used as
+// either a read-through or a manual cache.
 //
-// It supports per-entry cost, and a custom on-evict callback.
+// It supports per-entry cost, and custom on-retrieve and on-evict callbacks.
 //
-// Anticipated usage:
+// Anticipated usage (read-through):
 //
-//	func retrieveEntry(key Key) (interface{}, error) {
+//	func retrieveEntry(key lru.Key) (interface{}, lru.Cost, error) {
 //		// Expensive retrieval operation.
 //	}
-//	func evictEntry(key Key, value interface{}) {
+//	func evictEntry(key lru.Key, value interface{}) {
 //		// Optional release operation.
 //	}
-//	cache := lru.New(5, retrieveEntry)
+//	cache := lru.New(5)
+//	cache.OnRetrieve = retrieveEntry
 //	cache.OnEvict = evictEntry
 //	value, err := cache.Get(key)
 //	cache.Clear()
+//
+// Anticipated usage (manual caching):
+//
+//	cache := lru.New(5)
+//	cache.Put(key1, value1)
+//	cache.Put(key2, value2)
+//	value, err := cache.Get(key1)
+//	if err != nil {
+//		// ... (must be ErrMissingEntry)
+//	}
 package lru
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
 	"math"
 )
+
+// ErrMissingEntry is returned from `Get` if there is no such entry in the
+// cache, and there is no retriever function.
+//
+// If there is no retriever function, this is the only error than can be
+// returned from `Get`.
+var ErrMissingEntry = errors.New("missing entry")
 
 // Key can be any map-key-compatible type.
 type Key interface{}
@@ -63,14 +83,20 @@ type Cache struct {
 	// a single "jumbo" entry whose cost is greater than this.
 	MaxCost Cost
 
-	retriever RetrieverFunc
+	// OnRetrieve, if not nil, is called when Get does not find an entry in the
+	// cache.
+	//
+	// If nil, the return value will be nil with a `ErrMissingEntry` error.
+	OnRetrieve RetrieverFunc
 
 	// OnEvict, if not nil, is called each time a cache entry is evicted.
 	OnEvict EvictionFunc
 }
 
-// New returns a new LRU cache with the given maximum size and retriever
-// function.
+// New returns a new LRU cache with the given maximum size.
+//
+// You may want to add a retriever and/or eviction function to the returned
+// cache.
 //
 // If you want to limit by entry count, set the `maxCost` to the desired maximum
 // number of entries, and return a cost of 1 from your retriever function.
@@ -82,12 +108,11 @@ type Cache struct {
 // Negative costs are not supported and will cause panics.
 //
 // Maximum cache cost is `math.MaxInt64`.
-func New(maxCost Cost, retriever RetrieverFunc) *Cache {
+func New(maxCost Cost) *Cache {
 	return &Cache{
-		list:      list.New(),
-		entries:   make(map[Key]*list.Element),
-		MaxCost:   maxCost,
-		retriever: retriever,
+		list:    list.New(),
+		entries: make(map[Key]*list.Element),
+		MaxCost: maxCost,
 	}
 }
 
@@ -96,9 +121,17 @@ func (c *Cache) Cost() Cost { return c.cost }
 
 // Get retrieves an entry.
 //
-// If necessary, the cache will request the entry from the RetrieverFunc.
+// If necessary and available, the cache will request the entry from the
+// RetrieverFunc.
 //
 // Panics if the cost of a new entry would overflow the cache cost.
+//
+// If there is no retriever function, the only error that this can return is
+// `ErrMissingEntry`. If there is a retriever function, this will return
+// whatever error the retriever returned.
+//
+// If the retriever returns an error, the value will not be saved in the cache,
+// but this will return whatever value the retriever returned.
 func (c *Cache) Get(key Key) (value interface{}, err error) {
 	entry, ok := c.entries[key]
 	if ok {
@@ -106,8 +139,12 @@ func (c *Cache) Get(key Key) (value interface{}, err error) {
 		return entry.Value.(cell).value, nil
 	}
 
+	if c.OnRetrieve == nil {
+		return nil, ErrMissingEntry
+	}
+
 	var cost Cost
-	value, cost, err = c.retriever(key)
+	value, cost, err = c.OnRetrieve(key)
 	if err != nil {
 		return
 	}

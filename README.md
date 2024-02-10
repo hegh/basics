@@ -125,12 +125,14 @@ configuration to `ln` itself. But I am hoping that this won't be necessary.
 
 ## lru - An LRU cache
 
-A simple cost-based read-through cache with least-recently-used eviction
-semantics.
+A simple cost-based cache with a least-recently-used eviction strategy. Can be
+used as either a read-through cache (it will call a getter for each missing
+entry), or as a manual cache (you put entries into the cache, and it holds
+some of them).
 
-All you need to provide is a retriever function to look up values associated
-with keys, and a maximum cache cost. Optionally, you can also provide a
-function to be called on eviction.
+All you need to provide is a maximum cache cost. Optionally, you can also
+provide a function to be called on eviction, and a function to be called to
+retrieve missing entries (to make it a read-through cache).
 
 See cache/lru/lru.go for usage instructions.
 
