@@ -194,6 +194,10 @@ func (c *Cache) Clear() {
 
 // EvictOldest evicts the least recently used entry from the cache.
 func (c *Cache) EvictOldest() {
+	if len(c.entries) == 0 {
+		return
+	}
+
 	value := c.list.Remove(c.list.Front()).(*cell)
 	delete(c.entries, value.key)
 	c.cost -= value.cost

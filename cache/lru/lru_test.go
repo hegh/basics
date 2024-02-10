@@ -1021,3 +1021,15 @@ func TestGetCostOverflowPanics(t *testing.T) {
 	}()
 	c.Get(2)
 }
+
+func TestEvictOldestOnEmptyCache(t *testing.T) {
+	// Verify EvictOldest is a no-op on an empty cache.
+	c := New(100)
+	c.EvictOldest()
+}
+
+func TestEvictMissingEntry(t *testing.T) {
+	// Verify Evict on a missing entry is a no-op.
+	c := New(100)
+	c.Evict(1)
+}
