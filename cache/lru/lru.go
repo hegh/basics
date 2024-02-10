@@ -70,7 +70,7 @@ type EvictionFunc func(key Key, value interface{})
 //
 // Not internally synchronized.
 type Cache struct {
-	list    *list.List            // Entries are `cell` structs.
+	list    *list.List            // Entries are `*cell`s.
 	entries map[Key]*list.Element // Same entries as in the list.
 	cost    Cost
 
@@ -136,7 +136,7 @@ func (c *Cache) Get(key Key) (value interface{}, err error) {
 	entry, ok := c.entries[key]
 	if ok {
 		c.list.MoveToBack(entry)
-		return entry.Value.(cell).value, nil
+		return entry.Value.(*cell).value, nil
 	}
 
 	if c.OnRetrieve == nil {
@@ -152,7 +152,10 @@ func (c *Cache) Get(key Key) (value interface{}, err error) {
 	return
 }
 
-// Put directly adds an entry to the cache.
+// Put directly adds an entry to the cache, or refreshes an existing entry.
+//
+// If the entry already existed in the cache, its cost will be updated to the
+// value provided in this call.
 //
 // May cause evictions of other entries.
 //
@@ -165,8 +168,16 @@ func (c *Cache) Put(key Key, cost Cost, value interface{}) {
 		panic(fmt.Errorf("cost overflow: cache cost %d + entry %v cost %d > limit %d", c.cost, key, cost, math.MaxInt64))
 	}
 
-	c.entries[key] = c.list.PushBack(cell{key, value, cost})
-	c.cost += cost
+	entry, ok := c.entries[key]
+	if ok {
+		c.list.MoveToBack(entry)
+		c.cost -= entry.Value.(*cell).cost
+		entry.Value.(*cell).cost = cost
+		c.cost += cost
+	} else {
+		c.entries[key] = c.list.PushBack(&cell{key, value, cost})
+		c.cost += cost
+	}
 	for c.cost > c.MaxCost && len(c.entries) > 1 {
 		c.EvictOldest()
 	}
@@ -183,7 +194,7 @@ func (c *Cache) Clear() {
 
 // EvictOldest evicts the least recently used entry from the cache.
 func (c *Cache) EvictOldest() {
-	value := c.list.Remove(c.list.Front()).(cell)
+	value := c.list.Remove(c.list.Front()).(*cell)
 	delete(c.entries, value.key)
 	c.cost -= value.cost
 	if c.OnEvict != nil {
@@ -202,7 +213,7 @@ func (c *Cache) Evict(key Key) {
 		return
 	}
 
-	value := entry.Value.(cell)
+	value := entry.Value.(*cell)
 	delete(c.entries, value.key)
 	c.list.Remove(entry)
 	if c.OnEvict != nil {

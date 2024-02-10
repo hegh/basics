@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// TODO:
-//  * Cost overflow panics
-
 func TestGetCachedEntry(t *testing.T) {
 	// Verify cached entries are retrieved from the cache.
 	one, two := "one", "two"
@@ -858,7 +855,6 @@ func TestEvictEntry(t *testing.T) {
 func TestPut(t *testing.T) {
 	// Verify we can manually add an entry to the cache.
 	one, two, three := "one", "two", "three"
-	calls := 0
 	c := New(100)
 	c.OnEvict = func(key Key, value interface{}) {
 		// Use panic because t.Errorf doesn't tell us where it happened.
@@ -869,9 +865,6 @@ func TestPut(t *testing.T) {
 	c.Put(1, 1, one)
 	c.Put(2, 1, two)
 	c.Put(3, 1, three)
-	if got, want := calls, 0; got != want {
-		t.Errorf("got %v want %v calls", got, want)
-	}
 
 	// Make sure evictions work correctly.
 	// Evict 2, which is neither the oldest nor newest.
@@ -912,8 +905,38 @@ func TestPut(t *testing.T) {
 	} else if got, want := v, three; got != want {
 		t.Errorf("got %v want %v", got, want)
 	}
-	if got, want := calls, 0; got != want {
-		t.Errorf("got %v want %v calls", got, want)
+}
+
+func TestPutRefreshesEntry(t *testing.T) {
+	// Verify that Put on an existing entry refreshes its place in the cache.
+	one, two := "one", "two"
+	c := New(2) // Enough for two entries.
+	c.OnEvict = func(key Key, value interface{}) {
+		// Use panic because t.Errorf doesn't tell us where it happened.
+		panic(fmt.Errorf("unexpected eviction of key %v value %v", key, value))
+	}
+
+	// Populate the cache manually.
+	c.Put(1, 1, one)
+	c.Put(2, 1, two)
+
+	// Refreshing 1 with Put should not cause any evictions.
+	c.Put(1, 1, one)
+
+	// Make sure 2 gets evicted as the oldest entry.
+	evicted := false
+	c.OnEvict = func(key Key, value interface{}) {
+		evicted = true
+		if got, want := key, 2; got != want {
+			t.Errorf("got %v want %v as evicted key", got, want)
+		}
+		if got, want := value, two; got != want {
+			t.Errorf("got %v want %v as evicted value", got, want)
+		}
+	}
+	c.EvictOldest()
+	if !evicted {
+		t.Errorf("expected eviction")
 	}
 }
 
