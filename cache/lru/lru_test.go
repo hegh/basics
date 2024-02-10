@@ -1047,3 +1047,28 @@ func TestEvictMissingEntry(t *testing.T) {
 		t.Errorf("got %v want %v from Evict", got, want)
 	}
 }
+
+func TestPutUpdatesCostAndValue(t *testing.T) {
+	// Verify Put will update the cost & value of an entry.
+	c := New(100)
+
+	c.Put(1, 1, "one")
+	if got, want := c.Cost(), Cost(1); got != want {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if got, err := c.Get(1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	} else if want := "one"; got != want {
+		t.Fatalf("got %v want %v", got, want)
+	}
+
+	c.Put(1, 2, "two")
+	if got, want := c.Cost(), Cost(2); got != want {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if got, err := c.Get(1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	} else if want := "two"; got != want {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}

@@ -154,33 +154,46 @@ func (c *Cache) Get(key Key) (value interface{}, err error) {
 
 // Put directly adds an entry to the cache, or refreshes an existing entry.
 //
-// If the entry already existed in the cache, its cost will be updated to the
-// value provided in this call.
+// If the entry already existed in the cache, its cost and value will be
+// updated to the values provided in this call.
 //
 // May cause evictions of other entries.
 //
 // Panics if the cost of the new entry would overflow the cache cost.
-func (c *Cache) Put(key Key, cost Cost, value interface{}) {
+//
+// Returns the previous value of the entry, or nil.
+func (c *Cache) Put(key Key, cost Cost, value interface{}) interface{} {
 	if cost < 0 {
 		panic(fmt.Errorf("illegal cost: entry %v cost %d is negative", key, cost))
 	}
-	if c.cost+cost < 0 {
-		panic(fmt.Errorf("cost overflow: cache cost %d + entry %v cost %d > limit %d", c.cost, key, cost, math.MaxInt64))
-	}
 
+	var prev interface{}
 	entry, ok := c.entries[key]
 	if ok {
+		entryCell := entry.Value.(*cell)
+
+		if c.cost-entryCell.cost+cost < 0 {
+			panic(fmt.Errorf("cost overflow: cache cost %d + entry %v cost %d > limit %d", c.cost-entryCell.cost, key, cost, math.MaxInt64))
+		}
+
 		c.list.MoveToBack(entry)
-		c.cost -= entry.Value.(*cell).cost
-		entry.Value.(*cell).cost = cost
+		c.cost -= entryCell.cost
 		c.cost += cost
+
+		prev = entryCell.value
+		entryCell.cost = cost
+		entryCell.value = value
 	} else {
+		if c.cost+cost < 0 {
+			panic(fmt.Errorf("cost overflow: cache cost %d + entry %v cost %d > limit %d", c.cost, key, cost, math.MaxInt64))
+		}
 		c.entries[key] = c.list.PushBack(&cell{key, value, cost})
 		c.cost += cost
 	}
 	for c.cost > c.MaxCost && len(c.entries) > 1 {
 		c.EvictOldest()
 	}
+	return prev
 }
 
 // Clear evicts every entry in the cache.
