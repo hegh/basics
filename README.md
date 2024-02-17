@@ -3,11 +3,12 @@ the standard library.
 
 # Components
 
+* [cache/lru](#lru---an-lru-cache) - An LRU cache with a read-through interface
+* [io/writecounter](#writecounter---a-writer-that-counts-bytes-written) - A writer that counts bytes written
 * [ln](#ln---a-logging-package-with-a-natural-interface) - A logging package with a natural interface
-* [lru](#lru---an-lru-cache) - An LRU cache with a read-through interface
 * [refcount](#refcount---for-refcounting-expensive-resources) - For refcounting expensive resources
+* [sync/semaphore](#semaphore---a-simple-semaphore) - A semaphore implementation.
 * [todo](#todo---filler-for-functions-that-havent-been-written-yet) - Filler for functions that haven't been written yet
-* [writecounter](#writecounter---a-writer-that-counts-bytes-written) - A writer that counts bytes written
 
 Deprecated:
 
@@ -258,4 +259,13 @@ To test whether a given error originated with your template error:
 
     template == errors.Original(err)
 
+## Semaphore - A simple semaphore
+
+A strict and a non-strict implementation of a basic semaphore, which feels like
+something the standard library `sync` package should have provided.
+
+The strict implementation disallows growing the size of the semaphore, and
+detects attempts to acquire too many slots.
+
+The non-strict implementation allows size changes.
 
