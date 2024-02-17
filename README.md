@@ -169,6 +169,97 @@ To use:
 
 See the file comment in refcount/refcount.go for an example.
 
+### How to use refcount and LRU cache together
+
+This is a bit tricky, but you can combine the use of the `lru` package with an
+existing use of `refcount` in a way that is invisible to your callers. This
+example assumes the refcounted object is a file, kept open as long as there are
+any open references to it. A file is refreshed in the cache any time a new
+reference is requested for it.
+
+Example:
+
+```
+var (
+  cacheLock sync.Mutex
+  fileCache *lru.Cache // Cache of open files by path.
+)
+
+func init() {
+  fileCache = lru.New(16) // Max 16 open files.
+
+  // On cache eviction, close the reference to the file.
+  // If there are other references open, the file will stay open until they are
+  // closed, but it won't be held open by the cache any longer.
+  fileCache.OnEvict = func(_ lru.Key, value any) {
+    value.(io.Closer).Close()
+  }
+}
+
+type File struct {
+  path string
+
+  rc *refcount.RefCount
+  file *os.File
+}
+
+func New(path string) *File {
+  f := &File{
+    path: path,
+  }
+  f.rc = refcount.New(f.open, f.close)
+  return f
+}
+
+func (f *File) open() (err error) {
+  c.file, err = os.Open(c.path)
+  return
+}
+
+func (f *File) close() error {
+  c.file.Close() // Ignore the error. This is assuming read-only file caching.
+  c.file = nil
+  return nil
+}
+
+func (f *File) GetReference() (closer io.Closer, err error) {
+  // Get two open references. The first will be returned.
+  // If the file is already open in the cache, this will be super cheap.
+  closer, err = f.rc.Increment()
+  if err != nil {
+    return
+  }
+  defer func() {
+    if err != nil {
+      closer.Close() // Clean up on error.
+      closer = nil
+    }
+  }()
+
+  // The second closer goes into the cache.
+  cachedCloser, err := f.rc.Increment()
+  if err != nil {
+    return
+  }
+  func() {
+    cacheLock.Lock()
+    defer cacheLock.Unlock()
+    had := fileCache.Put(f.path, 1, cachedCloser)
+    if had != nil {
+      cachedCloser = had.(io.Closer)
+    }
+  }()
+
+  // If there was already a cached closer, close it (we don't need three).
+  // Do this outside of the synchronized subfunction so we don't hold the lock
+  // open any longer than needed.
+  if cachedCloser != nil {
+    cachedCloser.Close()
+  }
+  return
+}
+```
+
 ## todo - Filler for functions that haven't been written yet
 
 If you are writing new code, and want to test it as you go, the `todo` package
