@@ -360,3 +360,5 @@ detects attempts to acquire too many slots.
 
 The non-strict implementation allows size changes.
 
+Both implementations allow closing the semaphore to release all waiting routines
+and signaling to them that their blocking operations failed.

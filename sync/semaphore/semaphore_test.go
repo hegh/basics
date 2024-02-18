@@ -9,7 +9,7 @@ import (
 // waiting for something to happen before deciding it is dead.
 const timerDelay = 100 * time.Millisecond
 
-func testSemaphore(t *testing.T, newFunc func(n int) Semaphore) {
+func testAcquireRelease(t *testing.T, newFunc func(n int) Semaphore) {
 	s := newFunc(4)
 
 	// Try to acquire 3 at a time from 3 goroutines, without releasing.
@@ -21,7 +21,9 @@ func testSemaphore(t *testing.T, newFunc func(n int) Semaphore) {
 
 	for i := 0; i < 3; i++ {
 		go func() {
-			s.Acquire(3)
+			if n := s.Acquire(3); n != 3 {
+				t.Errorf("got %d want 3 from Acquire", n)
+			}
 			done <- struct{}{}
 		}()
 	}
@@ -78,16 +80,85 @@ func testSemaphore(t *testing.T, newFunc func(n int) Semaphore) {
 	}
 }
 
-func TestMutex(t *testing.T) {
-	testSemaphore(t, func(n int) Semaphore { return NewMutex(n) })
+func testClose(t *testing.T, newFunc func(n int) Semaphore) {
+	s := newFunc(3)
+
+	// Grab one of the slots and never return it, so the other acquires block
+	// without trying to acquire more than the semaphore size.
+	if n := s.Acquire(1); n != 1 {
+		t.Fatalf("got %d want 1 from Acquire before Close", n)
+	}
+
+	// Try to acquire 3 at a time from 3 goroutines, without releasing.
+	// All of these should block, until we close the semaphore.
+
+	// Sends a token on 'done' after each acquire succeeds.
+	done := make(chan struct{}, 3)
+
+	for i := 0; i < 3; i++ {
+		go func() {
+			n := s.Acquire(3)
+			if n != 0 {
+				t.Errorf("got %d want 0 from Acquire after Close", n)
+			}
+			done <- struct{}{}
+		}()
+	}
+
+	// Make sure nothing has been acquired.
+	select {
+	case <-done:
+		t.Fatalf("acquisition fired early")
+	case <-time.After(timerDelay):
+		// Good.
+	}
+
+	// Close the semaphore and make sure everyone immediately returns.
+	if err := s.Close(); err != nil {
+		t.Fatalf("unexpected error from Close: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		select {
+		case <-done:
+			// Good.
+		case <-time.After(timerDelay):
+			t.Fatalf("all acquisitions should have succeeded")
+		}
+	}
+
+	// Make sure a new acquisition immediately succeeds.
+	go func() {
+		n := s.Acquire(1)
+		if n != 0 {
+			t.Errorf("got %d want 0 from Acquire after Close", n)
+		}
+		done <- struct{}{}
+	}()
+	select {
+	case <-done:
+		// Good.
+	case <-time.After(timerDelay):
+		t.Errorf("new acquisition should have succeeded")
+	}
 }
 
-func TestStrictMutex(t *testing.T) {
-	testSemaphore(t, func(n int) Semaphore { return NewStrictMutex(n) })
+func TestRegularAcquireRelease(t *testing.T) {
+	testAcquireRelease(t, func(n int) Semaphore { return New(n) })
+}
+func TestRegularClose(t *testing.T) {
+	testClose(t, func(n int) Semaphore { return New(n) })
 }
 
-func TestStrictMutexPanic_LargeAcquire(t *testing.T) {
-	var s Semaphore = NewStrictMutex(1)
+func TestStrictAcquireRelease(t *testing.T) {
+	testAcquireRelease(t, func(n int) Semaphore { return NewStrict(n) })
+}
+func TestStrictClose(t *testing.T) {
+	testClose(t, func(n int) Semaphore { return NewStrict(n) })
+}
+
+func TestStrictPanic_LargeAcquire(t *testing.T) {
+	var s Semaphore = NewStrict(1)
 
 	defer func() {
 		if err := recover(); err == nil {
@@ -98,8 +169,8 @@ func TestStrictMutexPanic_LargeAcquire(t *testing.T) {
 	t.Errorf("expected panic")
 }
 
-func TestStrictMutexPanic_SizeIncrease(t *testing.T) {
-	var s Semaphore = NewStrictMutex(1)
+func TestStrictPanic_SizeIncrease(t *testing.T) {
+	var s Semaphore = NewStrict(1)
 
 	defer func() {
 		if err := recover(); err == nil {
