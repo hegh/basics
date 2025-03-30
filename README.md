@@ -23,8 +23,9 @@ An output log line will look something like this:
 
     I1203 10:04:59.846813 FuncName(filename.go:65) Message
 
-The `I` indicates this is at Info level. It could also be a `W`, `E`, or `F` for
-Warning, Error, or Fatal, respectively (the prefix is configurable).
+The `I` indicates this is at Info level. It could also be a `D`, `W`, `E`, or
+`F` for Debug, Warning, Error, or Fatal, respectively (the prefix is
+configurable).
 
 The `1203` indicates this was logged on December 3rd.
 
@@ -43,7 +44,8 @@ The important parts of the interface are:
     ln.Info.Print("This acts exactly like Info()")
     ln.Info.Printf("Message %s", "through a format string")
 
-The package also provides built-in `Warning`, `Error`, and `Fatal` loggers.
+The package also provides built-in `Debug`, `Warning`, `Error`, and `Fatal`
+loggers.
 
 ### Logging errors
 
@@ -70,7 +72,8 @@ Short names can be ambiguous, so long names take precedence.
 
 ### Output locations
 
-    ln.Info.LogTo(infoFile)
+    ln.LogAllTo(logFile)
+    ln.Info.LogTo(ln.Debug)
     ln.Warning.LogTo(ln.Info)
     ln.Error.LogTo(ln.Warning)
     ln.Fatal.LogTo(ln.Error, os.Stderr)
@@ -83,22 +86,43 @@ By default, all loggers write to `os.Stderr`.
 
 ### Send to a testing.T
 
-    ln.Info.LogTo(ln.PrintWriter{t.Log})
-    ln.Warning.LogTo(ln.Info)
-    ln.Error.LogTo(ln.PrintWriter{t.Error})
-    ln.Fatal.LogTo(ln.PrintWriter{t.Fatal})
+I recommend defining a `func init()` in each of your test files like this:
 
-For convenience, a `PrintWriter` struct is provided that can turn one of the
-functions on a `testing.T` into an output location for log messages.
+```
+func setupLogging(t testing.TB) func() {
+    snap := ln.Snapshot()
+    ln.LogAllTo(ln.PrintWriter{t.Log})
+    ln.Fatal.SetTrigger(t.FailNow)
 
-I don't actually recommend redirecting `Error` to `t.Error` unless you want error
-messages to fail your test. Fatal I would probably leave alone, unless you are
-writing a death test. In that case you may be better off redefining Fatal with
-your own trigger function:
+    ln.Info.Printf("beginning %s", t.Name())
+    return snap.Restore
+}
+```
+
+And in each of your test functions, begin like:
+
+```
+func TestSomething(t *testing.T) {
+    defer setupLogging(t)()
+
+    // ... rest of test ...
+}
+```
+
+`PrintWriter` turns a function like `testing.T.Log` into an output location for
+log messages.
+
+If you wanted, you could `ln.Error.LogTo(t.Error)` to fail the test if an error
+message gets logged, but I don't recommend it.
+
+For death tests, you might try:
 
     ln.Fatal = ln.MakeLogger("F", ln.PrintWriter{t.Log}, func() {
       fatalCalled = true
+      panic(typeSpecificErrorTest{})
     })
+
+If a fatal condition won't muck up the environment for other tests.
 
 ### Use UTC for log message timestamps
 

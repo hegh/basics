@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/hegh/basics/errors"
 )
+
+type any = interface{}
 
 var (
 	// TZ is the timezone to use for log messages.
@@ -32,22 +32,135 @@ var (
 	// Note that package main is always just 'main' and should never have a path.
 	PackageVerbosity = make(map[string]int)
 
+	// Debug logs messages at Debug level.
+	Debug = New("D", os.Stderr, nil)
+
 	// Info logs messages at Info level.
-	Info = MakeLogger("I", os.Stderr, nil)
+	Info = New("I", os.Stderr, nil)
 
 	// Warning logs messages at Warning level.
-	Warning = MakeLogger("W", os.Stderr, nil)
+	Warning = New("W", os.Stderr, nil)
 
-	// Error logs messages at Error level.
-	Error = MakeLogger("E", os.Stderr, nil)
+	// Error logs messages at Error level. Syncs after every write.
+	Error = New("E", NewSyncWriter(os.Stderr), nil)
 
 	// Fatal logs messages at Fatal level, and then terminates the program.
-	Fatal = MakeLogger("F", os.Stderr, Terminate)
+	Fatal = New("F", NewSyncWriter(os.Stderr), Terminate)
 
-	nilLogger = Logger(func(a ...interface{}) (int, error) {
+	nilLogger = Logger(func(a ...any) (int, error) {
 		return 0, nil
 	})
 )
+
+// LogAllTo sets up all loggers using the default prefixes & triggers, writing
+// to the given writer.
+//
+// Does not set any writers to sync.
+func LogAllTo(w io.Writer) {
+	Debug = New("D", w, nil)
+	Info = New("I", w, nil)
+	Warning = New("W", w, nil)
+	Error = New("E", w, nil)
+	Fatal = New("F", w, Terminate)
+}
+
+// MakeLogger is deprecated in favor of `New`, and may be removed in the future.
+func MakeLogger(prefix string, w io.Writer, trigger func()) Logger {
+	return New(prefix, w, trigger)
+}
+
+// New returns a new Logger that writes to `w`.
+//
+// Every line of output will have the given `prefix`. Usually this is a single
+// letter, but in can be anything.
+//
+// If not nil, the `trigger` function is called after each message is written.
+// Primarily intended for the Fatal logger implementation, which triggers the
+// program to terminate after logging a message.
+//
+// To sync after each write, wrap the writer in a `NewSyncWriter(w)` call.
+//
+// To write to multiple sinks, wrap with an `io.MultiWriter`.
+func New(prefix string, w io.Writer, trigger func()) Logger {
+	lg := &logger{
+		prefix:  prefix,
+		w:       w,
+		trigger: trigger,
+	}
+	return newLogger(lg)
+}
+
+func newLogger(lg *logger) Logger {
+	var l Logger = func(a ...any) (int, error) {
+		if len(a) == 1 {
+			if o, ok := a[0].(op); ok {
+				// Implement the magic that lets Logger be a function rather than a
+				// struct, but still have associated data.
+				return o.op(lg)
+			}
+		}
+		message := assemble(1, lg.prefix, fmt.Sprint(a...))
+		return lg.Write(message)
+	}
+	return l
+}
+
+// Config holds the configuration settings for a collection of loggers, and
+// provides simple snapshot/restore for the package settings.
+type Config struct {
+	TZ                                 *time.Location
+	Verbosity                          int
+	PackageVerbosity                   map[string]int
+	Debug, Info, Warning, Error, Fatal Logger
+}
+
+// Restore sets the package settings to the values from the config.
+//
+// The PackageVerbosity map is cloned, so changes to the config are not
+// reflected in the package post-restore, and vice-versa.
+//
+// May be called more than once.
+func (c *Config) Restore() {
+	TZ = c.TZ
+	Verbosity = c.Verbosity
+	PackageVerbosity = make(map[string]int, len(c.PackageVerbosity))
+	for k, v := range c.PackageVerbosity {
+		PackageVerbosity[k] = v
+	}
+	Debug, Info, Warning, Error, Fatal = c.Debug, c.Info, c.Warning, c.Error, c.Fatal
+}
+
+// Snapshot takes a snapshot of the current package settings, to allow for
+// easy restoration.
+//
+// The PackageVerbosity map is cloned, so changes post-snapshot are not
+// reflected in the snapshot.
+func Snapshot() *Config {
+	pv := make(map[string]int, len(PackageVerbosity))
+	for k, v := range PackageVerbosity {
+		pv[k] = v
+	}
+	return &Config{
+		TZ:               TZ,
+		Verbosity:        Verbosity,
+		PackageVerbosity: pv,
+		Debug:            Debug.Clone(),
+		Info:             Info.Clone(),
+		Warning:          Warning.Clone(),
+		Error:            Error.Clone(),
+		Fatal:            Fatal.Clone(),
+	}
+}
+
+// LevelEnabled returns true if a log message at the given level would be
+// passed through from the current file and with the current verbosity settings.
+func LevelEnabled(level int) bool {
+	v := Verbosity
+	if pv, ok := packageVerbosity(1); ok {
+		v = pv
+	}
+	return level <= v
+}
 
 // V returns the Info logger if the given level is less than or equal to the
 // current Verbosity. Otherwise it returns the nil logger, which throws away
@@ -70,13 +183,27 @@ func V(level int) Logger {
 // Calling the Logger as a function acts the same as calling the Print method
 // with the same parameters.
 //
-// A nil Logger is perfectly valid, and will act like /dev/null for all of its
-// output. The only thing you can't do with it is call it like a function.
-type Logger func(a ...interface{}) (n int, err error)
+// A nil Logger is valid, and will throw away its output, BUT it will panic if
+// called like a function.
+type Logger func(a ...any) (n int, err error)
+
+// String returns the prefix of the Logger, or "?".
+func (l Logger) String() string { return l.getLogger().String() }
+
+// Clone returns a new Logger that is a copy of the receiver.
+func (l Logger) Clone() Logger {
+	lg := l.getLogger()
+	if lg == nil {
+		return NilLogger()
+	}
+
+	lg = lg.clone()
+	return newLogger(lg)
+}
 
 // Print writes the parameters to the Logger, formatted as if they were passed
 // through fmt.Print.
-func (l Logger) Print(a ...interface{}) (int, error) {
+func (l Logger) Print(a ...any) (int, error) {
 	lg := l.getLogger()
 	if lg == nil {
 		return 0, nil
@@ -88,15 +215,31 @@ func (l Logger) Print(a ...interface{}) (int, error) {
 
 // Printf writes a formatted result to the Logger, using the same formatting
 // rules as fmt.Printf.
-func (l Logger) Printf(format string, a ...interface{}) (int, error) {
+func (l Logger) Printf(format string, a ...any) (int, error) {
 	lg := l.getLogger()
 	if lg == nil {
 		return 0, nil
 	}
 
-	replaceErrors(a)
 	message := assemble(1, lg.prefix, fmt.Sprintf(format, a...))
 	return lg.Write(message)
+}
+
+// LogTo changes the io.Writer associated with the Logger.
+//
+// The Logger will write to all of the associated writers, which can be other
+// Loggers. If the list is empty, then the logger will not output anything.
+//
+// Has no effect on the nil logger.
+//
+// If you want to sync after writing a message, wrap your logger in
+// `NewSyncLogger(w)`.
+func (l Logger) LogTo(writers ...io.Writer) {
+	lg := l.getLogger()
+	if lg == nil {
+		return
+	}
+	lg.w = io.MultiWriter(writers...)
 }
 
 // Write is a low-level function that forwards its parameter directly to the
@@ -115,28 +258,10 @@ func (l Logger) Write(p []byte) (int, error) {
 	return lg.Write(p)
 }
 
-// LogTo changes the io.Writer associated with the Logger.
-//
-// The Logger will write to all of the associated writers, which can be other
-// Loggers.
-func (l Logger) LogTo(writers ...io.Writer) {
-	lg := l.getLogger()
-	if lg == nil {
-		return
-	}
-
-	var w []io.Writer
-	for _, writer := range writers {
-		if sw, ok := writer.(syncableWriter); ok {
-			writer = &syncWriter{sw}
-		}
-		w = append(w, writer)
-	}
-	lg.w = io.MultiWriter(w...)
-}
-
 // SetTrigger changes the trigger that gets called when anything is written to
 // the Logger.
+//
+// No-op on the nil logger, which does not support triggers.
 func (l Logger) SetTrigger(trigger func()) {
 	lg := l.getLogger()
 	if lg == nil {
@@ -145,12 +270,8 @@ func (l Logger) SetTrigger(trigger func()) {
 	lg.trigger = trigger
 }
 
-// String returns the prefix of the Logger, or "(nil)".
-func (l Logger) String() string {
-	return l.getLogger().String()
-}
-
-// Get the logger holding the data associated with the given Logger.
+// getLogger returns the logger holding the data associated with the given
+// Logger.
 //
 // Watch out for nil, which will happen for the nil logger.
 func (l Logger) getLogger() *logger {
@@ -169,6 +290,8 @@ func (l Logger) getLogger() *logger {
 }
 
 // NilLogger returns a Logger that does nothing, as cheaply as possible.
+//
+// This logger CAN be called like a function.
 func NilLogger() Logger {
 	return nilLogger
 }
@@ -180,37 +303,55 @@ func NilLogger() Logger {
 // forwarded to the given Print function, removing up to one trailing newline.
 //
 // To use a Logger backed by a testing.T, set it up like this:
-//   Info.LogTo(PrintWriter{t.Log})
+//
+//	Info.LogTo(PrintWriter{t.Log})
 type PrintWriter struct {
-	P func(...interface{})
+	P func(...any)
 }
 
 // Write converts the given byte slice to a string and prints it to the Print
 // function backing the PrintWriter.
 func (w PrintWriter) Write(p []byte) (int, error) {
-	w.P(string(bytes.TrimSuffix(p, []byte("\n"))))
+	w.P(string(bytes.TrimSuffix(p, []byte{'\n'})))
 	return len(p), nil
 }
 
 // Holds the data associated with a Logger.
 type logger struct {
 	prefix  string
-	w       io.Writer // Probably an io.MultiWriter.
-	s       []syncWriter
-	trigger func()
+	w       io.Writer // Probably an io.MultiWriter. May be nil.
+	trigger func()    // May be nil.
 }
 
-type syncableWriter interface {
+func (l *logger) clone() *logger {
+	return &logger{
+		prefix:  l.prefix,
+		w:       l.w,
+		trigger: l.trigger,
+	}
+}
+
+// SyncableWriter is a writer than can Sync its output.
+type SyncableWriter interface {
 	io.Writer
 	Sync() error
 }
 
-// An io.Writer that syncs after each write.
-type syncWriter struct {
-	w syncableWriter
-}
+// SyncWriter is an io.Writer that syncs after each write.
+type SyncWriter struct{ w SyncableWriter }
 
-func (w *syncWriter) Write(p []byte) (n int, err error) {
+// NewSyncWriter wraps the given SyncableWriter in a SyncWriter.
+//
+// Writes through the returned SyncWriter will call Sync after writing.
+func NewSyncWriter(w SyncableWriter) *SyncWriter { return &SyncWriter{w} }
+
+// Write writes the given data following the contract specified by
+// io.Writer.Write.
+//
+// On a successful write (no error), syncs the writer before returning. If the
+// sync fails, that error is returned but the number of bytes written will be
+// equal to `len(p)`.
+func (w *SyncWriter) Write(p []byte) (n int, err error) {
 	n, err = w.w.Write(p)
 	if err != nil {
 		return
@@ -220,7 +361,7 @@ func (w *syncWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-// Write writes the given message to the writers associated with the logger.
+// Write writes the given message to the writer associated with the logger.
 //
 // If the logger has a trigger function, calls it after writing the message.
 func (l *logger) Write(p []byte) (n int, err error) {
@@ -234,12 +375,12 @@ func (l *logger) Write(p []byte) (n int, err error) {
 	return
 }
 
-// String returns the logger's prefix, or "(nil)".
+// String returns the logger's prefix, or "?".
 //
 // Primarily intended for debugging.
 func (l *logger) String() string {
 	if l == nil {
-		return "(nil)"
+		return "?"
 	}
 	return l.prefix
 }
@@ -253,43 +394,12 @@ type op struct {
 	op func(lg *logger) (n int, err error)
 }
 
-// MakeLogger builds a new Logger.
+// assemble concatenates the parts to create a full log message.
 //
-// prefix: The logger name prefix, which is prefixed to every line
-//   formatted and written by the logger.
-// w: The io.Writer that the logger sends all of its messages to.
-// trigger: If not nil, this function is called after each message goes through
-//   the logger. Primarily intended for the Fatal logger implementation, which
-//   triggers the program to terminate after logging a message.
-func MakeLogger(prefix string, w io.Writer, trigger func()) Logger {
-	lg := &logger{
-		prefix:  prefix,
-		w:       w,
-		trigger: trigger,
-	}
-	var l Logger = func(a ...interface{}) (int, error) {
-		if len(a) == 1 {
-			if o, ok := a[0].(op); ok {
-				// Implement the magic that lets Logger be a function rather than a
-				// struct, but still have associated data.
-				return o.op(lg)
-			}
-		}
-		message := assemble(1, lg.prefix, fmt.Sprint(a...))
-		return lg.Write(message)
-	}
-	return l
-}
-
-// Formats a log message.
+// `skip` specifies how many stack frames to go back (0 = caller of assemble)
+// when gathering callsite information to include in the message.
 //
-// skip: How many stack frames to go back (0 = caller of assemble) when
-//   gathering callsite information to include in the message.
-// prefix: The logger name prefix. Prefixed to the formatted log message.
-// msg: The message to log.
-//
-// Returns the formatted message, including a newline, as a byte slice that can
-// be passed directly to an io.Writer.
+// Returns the formatted message, including a newline, as a byte slice.
 func assemble(skip int, prefix string, msg string) []byte {
 	now := time.Now()
 	if tz := TZ; tz != nil {
@@ -306,17 +416,16 @@ func assemble(skip int, prefix string, msg string) []byte {
 		line = "??"
 	}
 
-	return []byte(fmt.Sprintf("%s%s %s %s(%s:%s) %s\n",
-		prefix, now.Format("0102"),
-		now.Format("15:04:05.000000"),
+	return []byte(fmt.Sprintf("%s%s %s(%s:%s) %s\n",
+		prefix, now.Format("0102 15:04:05.000000"),
 		fnc, file, line,
 		msg))
 }
 
-// Returns the file name (without path), line, and function name (witchout path)
-// of the caller.
+// caller returns the file name (without path), line, and function name
+// (witchout path) of the caller.
 //
-// skip: How many stack frames to go back (0 = caller of caller).
+// Jumps back `skip` frames (0 = caller of `caller`).
 func caller(skip int) (file string, line int, fnc string, ok bool) {
 	file, line, fnc, ok = fullCaller(skip + 1)
 	if !ok {
@@ -331,9 +440,10 @@ func caller(skip int) (file string, line int, fnc string, ok bool) {
 	return
 }
 
-// Returns the full file name, line, and full function name of the caller.
+// fullCaller returns the full file name, line, and full function name of the
+// caller.
 //
-// skip: How many stack frames to go back (0 = caller of fullCaller).
+// Jumps back `skip` frames (0 = caller of `fullCaller`).
 func fullCaller(skip int) (file string, line int, fnc string, ok bool) {
 	var pc uintptr
 	pc, file, line, ok = runtime.Caller(skip + 1)
@@ -346,10 +456,10 @@ func fullCaller(skip int) (file string, line int, fnc string, ok bool) {
 	return
 }
 
-// PackageName returns both the long and short names of the package of the
+// packageName returns both the long and short names of the package of the
 // caller.
 //
-// skip = 0 is the caller of packageName.
+// skip = 0 is the caller of `packageName`.
 func packageName(skip int) (long, short string, ok bool) {
 	// Full function name looks like path/to/pkg.Func
 	var f string
@@ -374,7 +484,7 @@ func packageName(skip int) (long, short string, ok bool) {
 	return
 }
 
-// PackageVerbosity returns the package-specific verbosity, or false if not set.
+// packageVerbosity returns the package-specific verbosity, or false if not set.
 func packageVerbosity(skip int) (v int, ok bool) {
 	if len(PackageVerbosity) == 0 {
 		return
@@ -390,11 +500,27 @@ func packageVerbosity(skip int) (v int, ok bool) {
 	return
 }
 
-// Replaces any error `err` in the given slice with `errors.String(err)`.
-func replaceErrors(a []interface{}) {
-	for i, v := range a {
-		if err, ok := v.(error); ok {
-			a[i] = errors.String(err)
-		}
+// ParsePackageVerbosity parses the given string of comma-separated
+// `package=verbosity` strings and merges them into `PackageVerbosity`.
+//
+// Returns an error on encountering a parse error.
+func ParsePackageVerbosity(s string) error {
+	if s == "" {
+		return nil
 	}
+
+	parts := strings.Split(s, ",")
+	for _, part := range parts {
+		pkg, v, ok := strings.Cut(part, "=")
+		if !ok {
+			return fmt.Errorf("'%s' in package verbosity '%s' not in 'pkg=verbosity' format", part, s)
+		}
+
+		verb, err := strconv.ParseInt(v, 10, 32)
+		if err != nil {
+			return fmt.Errorf("'%s in package verbosity '%s': bad verbosity: %w", part, s, err)
+		}
+		PackageVerbosity[pkg] = int(verb)
+	}
+	return nil
 }

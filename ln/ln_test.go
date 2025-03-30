@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"os/signal"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,7 +32,8 @@ const (
 // Matches the first line out of multiple log lines.
 //
 // Example message:
-//  X1202 10:04:59.846813 TestCall(ln_test.go:65) test info message\n
+//
+//	X1202 10:04:59.846813 TestCall(ln_test.go:65) test info message\n
 var matcher = regexp.MustCompile(
 	`^(.)\d{4} (\d{2}:\d{2}:\d{2}\.\d{6}) ([^(]+)\(([^:]+):(\d+)\) (.*)`)
 
@@ -116,7 +118,7 @@ func TestPackageName(t *testing.T) {
 // TestCall verifies the Logger can be called like a function.
 func TestCall(t *testing.T) {
 	s := newSink()
-	l := MakeLogger("X", s, s.trigger)
+	l := New("X", s, s.trigger)
 
 	msg := "test info message"
 
@@ -155,7 +157,7 @@ func TestCall(t *testing.T) {
 // TestTZ verifies that changing the TZ changes the timestamps.
 func TestTZ(t *testing.T) {
 	s := newSink()
-	l := MakeLogger("X", s, nil)
+	l := New("X", s, nil)
 
 	TZ = time.FixedZone("zone1", 3600)
 	l("msg")
@@ -188,7 +190,7 @@ func TestTZ(t *testing.T) {
 // TestPrint verifies the Print method of the Logger produces the right output.
 func TestPrint(t *testing.T) {
 	s := newSink()
-	l := MakeLogger("X", s, s.trigger)
+	l := New("X", s, s.trigger)
 
 	msg := "test info message"
 
@@ -227,7 +229,7 @@ func TestPrint(t *testing.T) {
 // TestPrint verifies the Printf method of the Logger produces the right output.
 func TestPrintf(t *testing.T) {
 	s := newSink()
-	l := MakeLogger("X", s, s.trigger)
+	l := New("X", s, s.trigger)
 
 	msg := "test info message"
 
@@ -267,7 +269,7 @@ func TestPrintf(t *testing.T) {
 // Logger's Writer.
 func TestWrite(t *testing.T) {
 	s := newSink()
-	l := MakeLogger("X", s, s.trigger)
+	l := New("X", s, s.trigger)
 
 	want := "test info message"
 	l.Write([]byte(want))
@@ -286,11 +288,11 @@ func TestWrite(t *testing.T) {
 func TestLogTo(t *testing.T) {
 	// Set up two loggers, each with its own sink.
 	s1 := newSink()
-	l1 := MakeLogger("A", s1, s1.trigger)
+	l1 := New("A", s1, s1.trigger)
 
 	// The second logger writes to both its own sink and the first logger.
 	s2 := newSink()
-	l2 := MakeLogger("B", s2, s2.trigger)
+	l2 := New("B", s2, s2.trigger)
 	l2.LogTo(l1, s2)
 
 	msg := "msg"
@@ -318,7 +320,7 @@ func TestLogTo(t *testing.T) {
 
 // TestVerbosity verifies the Verbosity var controls the logger returned by V.
 func TestVerbosity(t *testing.T) {
-	Info = MakeLogger("I", os.Stderr, nil)
+	Info = New("I", os.Stderr, nil)
 
 	Verbosity = 0
 	if l := V(1); l.String() != NilLogger().String() {
@@ -338,7 +340,7 @@ func TestVerbosity(t *testing.T) {
 
 // TestPackageVerbosity verifies that PackageVerbosity overrides Verbosity.
 func TestPackageVerbosity(t *testing.T) {
-	Info = MakeLogger("I", os.Stderr, nil)
+	Info = New("I", os.Stderr, nil)
 
 	// Verify we can lower the verbosity.
 	Verbosity = 1
@@ -358,7 +360,7 @@ func TestPackageVerbosity(t *testing.T) {
 // SetTrigger verifies we can change the trigger on a logger.
 func TestSetTrigger(t *testing.T) {
 	s := newSink()
-	l := MakeLogger("X", s, nil)
+	l := New("X", s, nil)
 
 	l("1")
 	l.SetTrigger(s.trigger)
@@ -393,8 +395,8 @@ func TestSyncWriter(t *testing.T) {
 	s2 := &sync{
 		sink: newSink(),
 	}
-	l := MakeLogger("X", s1, nil)
-	l.LogTo(s1, s2)
+	l := New("X", s1, nil)
+	l.LogTo(s1, NewSyncWriter(s2))
 
 	_, err := l("test")
 	if err != nil {
@@ -414,19 +416,99 @@ func TestSyncWriter(t *testing.T) {
 	}
 }
 
-func TestReplaceErrors(t *testing.T) {
-	err := errors.Errorf("message")
-	s := []interface{}{"hello", err, 1}
-	replaceErrors(s)
-	if s[0].(string) != "hello" {
-		t.Errorf("got %q want %q for s[0] after replaceErrors", s[0], "hello")
+// TestSnapshotRestore verifies that Snapshot and Restore work.
+//
+// Also tests LogAllTo.
+func TestSnapshotRestore(t *testing.T) {
+	buf1 := new(bytes.Buffer)
+	trigger1 := 0
+	LogAllTo(buf1)
+	Fatal.SetTrigger(func() { trigger1++ })
+	Verbosity = 3
+	PackageVerbosity = map[string]int{"test": 5}
+	snap := Snapshot()
+
+	buf2 := new(bytes.Buffer)
+	trigger2 := 0
+	// We use x.LogTo instead of LogAllTo to verify cloning works correctly.
+	Debug.LogTo(buf2)
+	Info.LogTo(Debug)
+	Warning.LogTo(Info)
+	Error.LogTo(Warning)
+	Fatal.LogTo(Error)
+	Fatal.SetTrigger(func() { trigger2++ })
+	Verbosity = 2
+	PackageVerbosity = map[string]int{"other": 4}
+
+	snap.Restore()
+	if got, want := Verbosity, 3; got != want {
+		t.Errorf("got %v want %v as verbosity after restore", got, want)
 	}
-	if s[2].(int) != 1 {
-		t.Errorf("got %q want %q for s[2] after replaceErrors", s[2], 1)
+	if got, want := PackageVerbosity, map[string]int{"test": 5}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v as package verbosity after restore", got, want)
 	}
 
-	re := regexp.MustCompile(`(?ms:^message$.*ln\.TestReplaceErrors\(\)$.*ln_test.go.*$.*)`)
-	if !re.MatchString(s[1].(string)) {
-		t.Errorf("expected %q to match\n%v", re, s[1])
+	Debug("test message")
+	if buf2.Len() > 0 {
+		t.Errorf("output written to wrong buffer after restore")
+	}
+	if buf1.Len() == 0 {
+		t.Errorf("output not written to correct buffer after restore")
+	}
+
+	buf1.Reset()
+	buf2.Reset()
+	Info("test message")
+	if buf2.Len() > 0 {
+		t.Errorf("output written to wrong buffer after restore")
+	}
+	if buf1.Len() == 0 {
+		t.Errorf("output not written to correct buffer after restore")
+	}
+
+	buf1.Reset()
+	buf2.Reset()
+	Info("test message")
+	if buf2.Len() > 0 {
+		t.Errorf("output written to wrong buffer after restore")
+	}
+	if buf1.Len() == 0 {
+		t.Errorf("output not written to correct buffer after restore")
+	}
+
+	buf1.Reset()
+	buf2.Reset()
+	Warning("test message")
+	if buf2.Len() > 0 {
+		t.Errorf("output written to wrong buffer after restore")
+	}
+	if buf1.Len() == 0 {
+		t.Errorf("output not written to correct buffer after restore")
+	}
+
+	buf1.Reset()
+	buf2.Reset()
+	Error("test message")
+	if buf2.Len() > 0 {
+		t.Errorf("output written to wrong buffer after restore")
+	}
+	if buf1.Len() == 0 {
+		t.Errorf("output not written to correct buffer after restore")
+	}
+
+	buf1.Reset()
+	buf2.Reset()
+	Fatal("test message")
+	if buf2.Len() > 0 {
+		t.Errorf("output written to wrong buffer after restore")
+	}
+	if buf1.Len() == 0 {
+		t.Errorf("output not written to correct buffer after restore")
+	}
+	if got, want := trigger1, 1; got != want {
+		t.Errorf("got %v want %v calls to trigger1", got, want)
+	}
+	if got, want := trigger2, 0; got != want {
+		t.Errorf("got %v want %v calls to trigger0", got, want)
 	}
 }

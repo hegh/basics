@@ -23,7 +23,7 @@ func AbortMe() error {
 // Terminate is the default trigger attached to the Fatal logger.
 //
 // It first tries to send SIGABRT to this process using AbortMe. If that
-// fails, or if the process does not die after a few seconds, then it forces
+// fails, or if the process does not die after 1 second, then it forces
 // termination with os.Exit(1).
 //
 // This function will not return.
@@ -35,5 +35,5 @@ func Terminate() {
 	}
 
 	// Sleep a moment to give the SIGABRT time to kill the process.
-	time.Sleep(30 * time.Second)
+	time.Sleep(1 * time.Second)
 }
