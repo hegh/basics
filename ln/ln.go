@@ -312,7 +312,7 @@ type PrintWriter struct {
 // Write converts the given byte slice to a string and prints it to the Print
 // function backing the PrintWriter.
 func (w PrintWriter) Write(p []byte) (int, error) {
-	w.P(string(bytes.TrimSuffix(p, []byte{'\n'})))
+	w.P(string(bytes.TrimSuffix(p, []byte("\r\n"))))
 	return len(p), nil
 }
 
